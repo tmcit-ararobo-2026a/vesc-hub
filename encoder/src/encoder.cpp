@@ -117,7 +117,10 @@ void loop()
 
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    rotate_count = (absolute_value / per_rotate_step);
+    if (absolute_value / per_rotate_step >= 1) {
+        rotate_count++;
+        absolute_value = 0;
+    }
 
     if (rotate_count >= motor_stop_count) {
         homing = true;
@@ -134,15 +137,9 @@ void loop()
     target_rpm = vesc_velo[0] * rpm_conversion_constant;
 
     if (!homing) {
-        if (rotate_count < motor_stop_count) {
-            vesc.comm_can_set_rpm(45, target_rpm);
-            vesc.comm_can_set_rpm(43, target_rpm);
-        } else {
-            vesc.comm_can_set_rpm(45, 0);
-            vesc.comm_can_set_rpm(43, 0);
-        }
+        vesc.comm_can_set_rpm(45, target_rpm);
+        vesc.comm_can_set_rpm(43, target_rpm);
     }
-
     send_anglar_data(rotates_test);
 }
 

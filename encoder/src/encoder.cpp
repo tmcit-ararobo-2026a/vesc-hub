@@ -117,10 +117,11 @@ void loop()
 
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    if (absolute_value >= 50 || absolute_value <= -50) {
+    rotate_count = (absolute_value / per_rotate_step);
+
+    if (rotate_count >= motor_stop_count) {
         homing = true;
     }
-    // rotate_count = absolute_value / per_rotate_step;
 
     float rotates_test[4] = {
         static_cast<float>(motor_point),

@@ -22,11 +22,11 @@ gn10_can::devices::MotorConfig motor_config_belt;
 uint8_t motor_num;
 
 // Hall sensor limit settings
-int32_t motor_stop_count = 1;
+int32_t motor_stop_count = 15;
 int32_t rotate_count     = 0;
 
 float vesc_velo[4]                      = {0.0f, 0.0f, 0.0f, 0.0f};
-constexpr float rpm_conversion_constant = -46000.0f;
+constexpr float rpm_conversion_constant = -40000.0f;
 float target_rpm                        = 0.0f;
 
 // Control flag
@@ -117,7 +117,7 @@ void loop()
 
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    if (absolute_value / per_rotate_step >= 1) {
+    if (absolute_value > 1000) {
         rotate_count++;
         absolute_value = 0;
     }
@@ -180,6 +180,8 @@ void send_anglar_data(float angular_data[4])
     }
 }
 
+bool gomi = true;
+
 /**
  * @brief Set the initial position of the motor.
  */
@@ -196,6 +198,7 @@ void do_homing()
         homing         = false;
         rotate_count   = 0;
         absolute_value = 0;
+        gomi           = false;
     }
 
     HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);

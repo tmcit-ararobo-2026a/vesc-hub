@@ -27,10 +27,8 @@ constexpr float rpm_conversion_constant = -40000.0f;
 float target_rpm                        = 0.0f;
 
 // Control flag
-bool is_moving   = false;
 bool magnet_near = false;
 bool homing      = false;
-bool target      = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -74,16 +72,9 @@ void setup()
 
 void loop()
 {
-    // if get command,we can see light LED
-    if (esc_hub.get_angular_velocities(vesc_velo)) {
-        is_moving =
-            (vesc_velo[0] != 0.0f || vesc_velo[1] != 0.0f || vesc_velo[2] != 0.0f ||
-             vesc_velo[3] != 0.0f);
-    }
-    if (is_moving) {
-        HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-    } else {
-        HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+    // 2~ init command
+    if (esc_hub.get_init(motor_num, motor_config_belt)) {
+        homing = true;
     }
 
     // Hall sensor settings
@@ -99,25 +90,12 @@ void loop()
         magnet_near = false;
     }
 
-    if (homing) {
-        do_homing();
-        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
-    } else {
-        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
-    }
-
-    // encoder test
-
     int16_t motor_point = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    if (target) {
-        absolute_value += abs(motor_point);
-    }
-
     absolute_value += motor_point;
 
-    if (absolute_value > 1800) {
+    if (absolute_value > 17000) {
         homing = true;
     }
 
@@ -135,12 +113,6 @@ void loop()
         static_cast<float>(homing),
         0.0f
     };
-
-    if (target_rpm != 0.0f) {
-        target = true;
-    } else {
-        target = false;
-    }
 
     send_anglar_data(rotates_test);
 }
@@ -197,7 +169,6 @@ void do_homing()
         vesc.comm_can_set_rpm(43, 0);
         homing         = false;
         absolute_value = 0;
-        target         = false;
     }
 
     HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);

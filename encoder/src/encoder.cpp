@@ -21,10 +21,7 @@ gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
 gn10_can::devices::MotorConfig motor_config_belt;
 uint8_t motor_num;
 
-// Hall sensor limit settings
-int32_t motor_stop_count = 15;
-int32_t rotate_count     = 0;
-
+constexpr int16_t noise                 = 1;
 float vesc_velo[4]                      = {0.0f, 0.0f, 0.0f, 0.0f};
 constexpr float rpm_conversion_constant = -40000.0f;
 float target_rpm                        = 0.0f;
@@ -33,6 +30,7 @@ float target_rpm                        = 0.0f;
 bool is_moving   = false;
 bool magnet_near = false;
 bool homing      = false;
+bool target      = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -46,8 +44,7 @@ uint32_t heartbeat_last_toggle_time_ms            = 0;
 constexpr uint32_t k_send_anglar_data_interval_ms = 100;
 uint32_t send_anglar_data_last_time_ms            = 0;
 
-int32_t absolute_value  = 0;
-int32_t per_rotate_step = 4000;
+int32_t absolute_value = 0;
 
 void update_heartbeat_led();
 
@@ -84,9 +81,9 @@ void loop()
              vesc_velo[3] != 0.0f);
     }
     if (is_moving) {
-        // HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
     } else {
-        // HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
     }
 
     // Hall sensor settings
@@ -102,7 +99,6 @@ void loop()
         magnet_near = false;
     }
 
-    // Init settings
     if (homing) {
         do_homing();
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
@@ -113,17 +109,24 @@ void loop()
     // encoder test
 
     int16_t motor_point = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
-    absolute_value += abs(motor_point);
-
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    if (absolute_value > 1000) {
-        rotate_count++;
-        absolute_value = 0;
+    if (target) {
+        absolute_value += abs(motor_point);
     }
 
-    if (rotate_count >= motor_stop_count) {
+    absolute_value += motor_point;
+
+    if (absolute_value > 1800) {
         homing = true;
+    }
+
+    // Control motor moving
+    target_rpm = vesc_velo[0] * rpm_conversion_constant;
+
+    if (!homing) {
+        vesc.comm_can_set_rpm(45, target_rpm);
+        vesc.comm_can_set_rpm(43, target_rpm);
     }
 
     float rotates_test[4] = {
@@ -133,13 +136,12 @@ void loop()
         0.0f
     };
 
-    // Control motor moving
-    target_rpm = vesc_velo[0] * rpm_conversion_constant;
-
-    if (!homing) {
-        vesc.comm_can_set_rpm(45, target_rpm);
-        vesc.comm_can_set_rpm(43, target_rpm);
+    if (target_rpm != 0.0f) {
+        target = true;
+    } else {
+        target = false;
     }
+
     send_anglar_data(rotates_test);
 }
 
@@ -180,8 +182,6 @@ void send_anglar_data(float angular_data[4])
     }
 }
 
-bool gomi = true;
-
 /**
  * @brief Set the initial position of the motor.
  */
@@ -196,9 +196,8 @@ void do_homing()
         vesc.comm_can_set_rpm(45, 0);
         vesc.comm_can_set_rpm(43, 0);
         homing         = false;
-        rotate_count   = 0;
         absolute_value = 0;
-        gomi           = false;
+        target         = false;
     }
 
     HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);

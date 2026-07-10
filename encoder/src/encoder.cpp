@@ -23,7 +23,7 @@ uint8_t motor_num;
 
 constexpr int16_t noise                 = 1;
 float vesc_velo[4]                      = {0.0f, 0.0f, 0.0f, 0.0f};
-constexpr float rpm_conversion_constant = -40000.0f;
+constexpr float rpm_conversion_constant = -46000.0f;
 float target_rpm                        = 0.0f;
 
 // Control flag
@@ -72,11 +72,7 @@ void setup()
 
 void loop()
 {
-    // 2~ init command
-    if (esc_hub.get_init(motor_num, motor_config_belt)) {
-        homing = true;
-    }
-
+    esc_hub.get_angular_velocities(vesc_velo);
     // Hall sensor settings
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, 100);
@@ -95,7 +91,11 @@ void loop()
 
     absolute_value += motor_point;
 
-    if (absolute_value > 17000) {
+    if (homing) {
+        do_homing();
+    }
+
+    if (absolute_value > 17000 || absolute_value < -17000) {
         homing = true;
     }
 

@@ -91,10 +91,6 @@ void loop()
 
     absolute_value += motor_point;
 
-    if (homing) {
-        do_homing();
-    }
-
     if (absolute_value > 17000 || absolute_value < -17000) {
         homing = true;
     }
@@ -105,6 +101,8 @@ void loop()
     if (!homing) {
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
+    } else {
+        do_homing();
     }
 
     float rotates_test[4] = {

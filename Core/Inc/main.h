@@ -69,9 +69,6 @@ void Error_Handler(void);
 #define Synchronization_flag_GPIO_Port GPIOA
 #define Synchronization_clock_Pin GPIO_PIN_3
 #define Synchronization_clock_GPIO_Port GPIOA
-#define LIM4_1_Pin GPIO_PIN_4
-#define LIM4_1_GPIO_Port GPIOA
-#define LIM4_1_EXTI_IRQn EXTI4_IRQn
 #define FLASH_IO3_Pin GPIO_PIN_6
 #define FLASH_IO3_GPIO_Port GPIOA
 #define FLASH_IO2_Pin GPIO_PIN_7

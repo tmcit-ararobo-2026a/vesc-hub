@@ -67,12 +67,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LIM4_1_Pin LIM4_2_Pin */
-  GPIO_InitStruct.Pin = LIM4_1_Pin|LIM4_2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pins : LIM1_1_Pin LIM1_2_Pin */
   GPIO_InitStruct.Pin = LIM1_1_Pin|LIM1_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -90,6 +84,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LIM4_2_Pin */
+  GPIO_InitStruct.Pin = LIM4_2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(LIM4_2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ID_4_SW_Pin */
   GPIO_InitStruct.Pin = ID_4_SW_Pin;
@@ -110,28 +110,25 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(POWER_MONITOR_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI8_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI8_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI8_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI9_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI9_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI9_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI10_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI10_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI10_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI11_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI11_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI11_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI12_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI12_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI12_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI14_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI14_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI14_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI15_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI15_IRQn, 8, 0);
   HAL_NVIC_EnableIRQ(EXTI15_IRQn);
 
 }

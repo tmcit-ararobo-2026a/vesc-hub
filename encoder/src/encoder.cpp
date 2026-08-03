@@ -20,10 +20,11 @@ uint8_t motor_num;
 
 // vesc
 VescCAN vesc(&hfdcan2);
+int16_t absolute_value;
+
 float vesc_velo[4]                      = {0.0f, 0.0f, 0.0f, 0.0f};
 constexpr float rpm_conversion_constant = -46000.0f;
 float target_rpm                        = 0.0f;
-bool magnet_near;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -70,10 +71,34 @@ void loop()
     // get command
     esc_hub.get_angular_velocities(vesc_velo);
 
-    // Control motor moving
+    // encoder
+    int16_t motor_point = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
+    __HAL_TIM_SET_COUNTER(&htim3, 0);
+
+    // absolute point
+    absolute_value += motor_point;
+
+    // Control motor moving rpm
     target_rpm = vesc_velo[0] * rpm_conversion_constant;
-    vesc.comm_can_set_rpm(45, target_rpm);
-    vesc.comm_can_set_rpm(43, target_rpm);
+
+    // motor run flag管理
+    if (absolute_value > 30000 || absolute_value < -30000) {
+        vesc.comm_can_set_rpm(45, 0);
+        vesc.comm_can_set_rpm(43, 0);
+    } else {
+        vesc.comm_can_set_rpm(45, target_rpm);
+        vesc.comm_can_set_rpm(43, target_rpm);
+    }
+
+    // set feedback data for gn10 main
+    float send_feedback_data[4] = {
+        static_cast<float>(motor_point), static_cast<float>(absolute_value), 0, 0
+
+    };
+
+    // send feedback data
+    esc_hub.set_angular_velocity_feedbacks(send_feedback_data);
+
     update_heartbeat_led();
 }
 

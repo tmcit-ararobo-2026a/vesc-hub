@@ -16,14 +16,15 @@ gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
 
 // These use get init
 gn10_can::devices::MotorConfig motor_config_belt;
-uint8_t motor_num;
+uint8_t motor_id = 0;
 
 // vesc
 VescCAN vesc(&hfdcan2);
-int16_t absolute_value;
+float absolute_value;
 
-float vesc_velo[4]                      = {0.0f, 0.0f, 0.0f, 0.0f};
+float vesc_vel[4]                       = {0.0f, 0.0f, 0.0f, 0.0f};
 constexpr float rpm_conversion_constant = -46000.0f;
+constexpr float target_rpm_init         = -2500.0f;
 float target_rpm                        = 0.0f;
 bool movement                           = true;
 bool magnet_near                        = false;
@@ -62,7 +63,7 @@ void setup()
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
 
     // Wait until a command "belt_init" arrives
-    while (!esc_hub.get_init(motor_num, motor_config_belt)) {
+    while (!esc_hub.get_init(motor_id, motor_config_belt)) {
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
     }
     HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
@@ -73,14 +74,14 @@ void setup()
 void loop()
 {
     // get command
-    esc_hub.get_angular_velocities(vesc_velo);
+    esc_hub.get_angular_velocities(vesc_vel);
 
     // encoder
-    int16_t motor_point = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
+    int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
     // absolute point
-    absolute_value += motor_point;
+    absolute_value += encoder_count;
 
     // Hall sensor settings
     HAL_ADC_Start(&hadc1);
@@ -98,7 +99,7 @@ void loop()
     }
 
     // Control motor moving rpm
-    target_rpm = vesc_velo[0] * rpm_conversion_constant;
+    target_rpm = vesc_vel[0] * rpm_conversion_constant;
 
     // しきい値管理
     if ((absolute_value > 30000 || absolute_value < -30000)) {
@@ -110,17 +111,17 @@ void loop()
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
     } else {
-        vesc.comm_can_set_rpm(45, 2500);
-        vesc.comm_can_set_rpm(43, 2500);
+        vesc.comm_can_set_rpm(45, target_rpm_init);
+        vesc.comm_can_set_rpm(43, target_rpm_init);
     }
 
     // set feedback data for gn10 main
-    float send_feedback_data[4] = {
-        static_cast<float>(motor_point), static_cast<float>(absolute_value), 0, 0
+    float anglar_data[4] = {
+        static_cast<float>(encoder_count), static_cast<float>(absolute_value), 0, 0
     };
 
-    // send feedback data
-    esc_hub.set_angular_velocity_feedbacks(send_feedback_data);
+    // send anglar data (realtime, absolute value and
+    send_anglar_data(anglar_data);
 
     update_heartbeat_led();
 }

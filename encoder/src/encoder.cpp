@@ -30,7 +30,7 @@ bool magnet_near                        = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
-float voltage_threshold_low  = 1.0f;
+// float voltage_threshold_low  = 1.3f;
 
 // LED config
 constexpr uint32_t k_heartbeat_toggle_interval_ms = 500;
@@ -100,7 +100,7 @@ void loop()
     // Control motor moving rpm
     target_rpm = vesc_velo[0] * rpm_conversion_constant;
 
-    // flag管理
+    // しきい値管理
     if ((absolute_value > 30000 || absolute_value < -30000)) {
         movement = false;
     }

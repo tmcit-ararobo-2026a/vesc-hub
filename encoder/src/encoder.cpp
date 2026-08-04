@@ -116,10 +116,7 @@ void loop()
 
     // set feedback data for gn10 main
     float send_feedback_data[4] = {
-        static_cast<float>(motor_point),
-        static_cast<float>(absolute_value),
-        static_cast<float>(magnet_near),
-        0
+        static_cast<float>(motor_point), static_cast<float>(absolute_value), 0, 0
     };
 
     // send feedback data

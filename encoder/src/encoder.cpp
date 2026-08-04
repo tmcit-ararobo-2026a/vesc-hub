@@ -110,8 +110,8 @@ void loop()
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
     } else {
-        vesc.comm_can_set_rpm(45, 0.0f);
-        vesc.comm_can_set_rpm(43, 0.0f);
+        vesc.comm_can_set_rpm(45, 2500);
+        vesc.comm_can_set_rpm(43, 2500);
     }
 
     // set feedback data for gn10 main

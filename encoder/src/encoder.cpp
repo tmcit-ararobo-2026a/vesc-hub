@@ -26,10 +26,11 @@ float vesc_velo[4]                      = {0.0f, 0.0f, 0.0f, 0.0f};
 constexpr float rpm_conversion_constant = -46000.0f;
 float target_rpm                        = 0.0f;
 bool movement                           = true;
+bool magnet_near                        = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
-float voltage_threshold_low  = 1.4f;
+float voltage_threshold_low  = 1.0f;
 
 // LED config
 constexpr uint32_t k_heartbeat_toggle_interval_ms = 500;
@@ -81,14 +82,30 @@ void loop()
     // absolute point
     absolute_value += motor_point;
 
+    // Hall sensor settings
+    HAL_ADC_Start(&hadc1);
+    HAL_ADC_PollForConversion(&hadc1, 100);
+    int32_t adc_val = HAL_ADC_GetValue(&hadc1);
+    float voltage   = (float)adc_val / 4095.0f * 3.3f;
+
+    // Control Hall sensor
+    if (voltage > voltage_threshold_high && !magnet_near) {
+        magnet_near    = true;
+        movement       = true;
+        absolute_value = 0.0f;
+    } else {
+        magnet_near = false;
+    }
+
     // Control motor moving rpm
     target_rpm = vesc_velo[0] * rpm_conversion_constant;
 
-    // motor run flag管理
+    // flag管理
     if ((absolute_value > 30000 || absolute_value < -30000)) {
         movement = false;
     }
 
+    // motor run
     if (movement) {
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
@@ -99,7 +116,10 @@ void loop()
 
     // set feedback data for gn10 main
     float send_feedback_data[4] = {
-        static_cast<float>(motor_point), static_cast<float>(absolute_value), 0, 0
+        static_cast<float>(motor_point),
+        static_cast<float>(absolute_value),
+        static_cast<float>(magnet_near),
+        0
     };
 
     // send feedback data

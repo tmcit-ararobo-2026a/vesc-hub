@@ -20,14 +20,16 @@ uint8_t motor_id = 0;
 
 // vesc
 VescCAN vesc(&hfdcan2);
-float absolute_value;
+int16_t absolute_value;
+float absolute_angle;
 
-float vesc_vel[4]                       = {0.0f, 0.0f, 0.0f, 0.0f};
-constexpr float rpm_conversion_constant = -46000.0f;
-constexpr float target_rpm_init         = -2500.0f;
-float target_rpm                        = 0.0f;
-bool movement                           = true;
-bool magnet_near                        = false;
+float vesc_vel[4]                        = {0.0f, 0.0f, 0.0f, 0.0f};
+constexpr float RPM_CONVERSION_CONSTANT  = -46000.0f;
+constexpr float TARGET_RPM_INIT          = -2500.0f;
+constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
+float target_rpm                         = 0.0f;
+bool movement                            = true;
+bool magnet_near                         = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -68,7 +70,7 @@ void setup()
     }
     HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
 
-    absolute_value = 0.0f;
+    absolute_value = 0;
 }
 
 void loop()
@@ -80,8 +82,11 @@ void loop()
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
+    float encoder_angular_vel = 2.0f * M_PI * (float)encoder_count / ENCODER_COUNT_PER_ROTATE;
+
     // absolute point
     absolute_value += encoder_count;
+    absolute_angle += encoder_angular_vel;
 
     // Hall sensor settings
     HAL_ADC_Start(&hadc1);
@@ -93,13 +98,13 @@ void loop()
     if (voltage > voltage_threshold_high && !magnet_near) {
         magnet_near    = true;
         movement       = true;
-        absolute_value = 0.0f;
+        absolute_value = 0;
     } else {
         magnet_near = false;
     }
 
     // Control motor moving rpm
-    target_rpm = vesc_vel[0] * rpm_conversion_constant;
+    target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
     // しきい値管理
     if ((absolute_value > 30000 || absolute_value < -30000)) {
@@ -111,13 +116,16 @@ void loop()
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
     } else {
-        vesc.comm_can_set_rpm(45, target_rpm_init);
-        vesc.comm_can_set_rpm(43, target_rpm_init);
+        vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
+        vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
     }
 
     // set feedback data for gn10 main
     float anglar_data[4] = {
-        static_cast<float>(encoder_count), static_cast<float>(absolute_value), 0, 0
+        static_cast<float>(encoder_count),
+        static_cast<float>(absolute_value),
+        encoder_angular_vel,
+        absolute_angle
     };
 
     // send anglar data (realtime, absolute value and

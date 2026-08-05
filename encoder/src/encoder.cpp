@@ -84,7 +84,7 @@ void loop()
 
     float encoder_angular_vel = 2.0f * M_PI * (float)encoder_count / ENCODER_COUNT_PER_ROTATE;
 
-    // absolute point
+    // absolute
     absolute_value += encoder_count;
     absolute_angle += encoder_angular_vel;
 
@@ -120,7 +120,7 @@ void loop()
         vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
     }
 
-    // set feedback data for gn10 main
+    // set anglar data for gn10 main
     float anglar_data[4] = {
         static_cast<float>(encoder_count),
         static_cast<float>(absolute_value),
@@ -128,7 +128,6 @@ void loop()
         absolute_angle
     };
 
-    // send anglar data (realtime, absolute value and
     send_anglar_data(anglar_data);
 
     update_heartbeat_led();

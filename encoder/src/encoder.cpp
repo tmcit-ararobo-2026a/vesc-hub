@@ -20,16 +20,17 @@ uint8_t motor_id = 0;
 
 // vesc
 VescCAN vesc(&hfdcan2);
-int16_t absolute_value;
 float absolute_angle;
 
 float vesc_vel[4]                        = {0.0f, 0.0f, 0.0f, 0.0f};
 constexpr float RPM_CONVERSION_CONSTANT  = -46000.0f;
 constexpr float TARGET_RPM_INIT          = -2500.0f;
 constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
+constexpr float A_ROTATE_ANGLE           = 360.0f;
 float target_rpm                         = 0.0f;
 bool movement                            = true;
 bool magnet_near                         = false;
+float rotate_count                       = 0.0f;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -70,7 +71,7 @@ void setup()
     }
     HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
 
-    absolute_value = 0;
+    absolute_angle = 0;
 }
 
 void loop()
@@ -82,11 +83,12 @@ void loop()
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    float encoder_angular_vel = 2.0f * M_PI * (float)encoder_count / ENCODER_COUNT_PER_ROTATE;
+    float encoder_angle = encoder_count * (A_ROTATE_ANGLE / ENCODER_COUNT_PER_ROTATE);
 
     // absolute
-    absolute_value += encoder_count;
-    absolute_angle += encoder_angular_vel;
+    absolute_angle += encoder_angle;
+
+    rotate_count = absolute_angle / A_ROTATE_ANGLE;
 
     // Hall sensor settings
     HAL_ADC_Start(&hadc1);
@@ -98,7 +100,7 @@ void loop()
     if (voltage > voltage_threshold_high && !magnet_near) {
         magnet_near    = true;
         movement       = true;
-        absolute_value = 0;
+        absolute_angle = 0.0f;
     } else {
         magnet_near = false;
     }
@@ -107,7 +109,7 @@ void loop()
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
     // しきい値管理
-    if ((absolute_value > 30000 || absolute_value < -30000)) {
+    if (rotate_count > 100) {
         movement = false;
     }
 
@@ -121,12 +123,7 @@ void loop()
     }
 
     // set anglar data for gn10 main
-    float anglar_data[4] = {
-        static_cast<float>(encoder_count),
-        static_cast<float>(absolute_value),
-        encoder_angular_vel,
-        absolute_angle
-    };
+    float anglar_data[4] = {rotate_count, 0.0f, encoder_angle, absolute_angle};
 
     send_anglar_data(anglar_data);
 

@@ -36,8 +36,8 @@ float rotate_count = 0.0f;
 float target_rpm   = 0.0f;
 
 // Voltage threshold for hall sensor
-float voltage_threshold_high = 1.8f;
-// float voltage_threshold_low  = 1.3f;
+float voltage_threshold_high = 0.5f;
+float voltage_threshold_low  = 0.3f;
 
 // LED config
 constexpr uint32_t k_heartbeat_toggle_interval_ms = 500;
@@ -101,17 +101,15 @@ void loop()
 
     // Control Hall sensor
     if (voltage > voltage_threshold_high && !magnet_near) {
-        magnet_near    = true;
-        movement       = true;
-        absolute_angle = 0.0f;
-    } else {
+        magnet_near = true;
+    } else if (magnet_near && voltage < voltage_threshold_low) {
         magnet_near = false;
     }
 
     // Control motor moving rpm
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
-    if (rotate_count > 100) {
+    if (rotate_count > 6) {
         movement = false;
     }
 

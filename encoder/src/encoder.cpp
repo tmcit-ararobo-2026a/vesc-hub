@@ -22,15 +22,18 @@ uint8_t motor_id = 0;
 VescCAN vesc(&hfdcan2);
 float absolute_angle;
 
-float vesc_vel[4]                        = {0.0f, 0.0f, 0.0f, 0.0f};
+// constants
 constexpr float RPM_CONVERSION_CONSTANT  = -46000.0f;
 constexpr float TARGET_RPM_INIT          = -2500.0f;
 constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
 constexpr float A_ROTATE_ANGLE           = 360.0f;
-float target_rpm                         = 0.0f;
-bool movement                            = true;
-bool magnet_near                         = false;
-float rotate_count                       = 0.0f;
+
+// definitions
+float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
+bool movement      = true;
+bool magnet_near   = false;
+float rotate_count = 0.0f;
+float target_rpm   = 0.0f;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -108,12 +111,10 @@ void loop()
     // Control motor moving rpm
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
-    // しきい値管理
     if (rotate_count > 100) {
         movement = false;
     }
 
-    // motor run
     if (movement) {
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);

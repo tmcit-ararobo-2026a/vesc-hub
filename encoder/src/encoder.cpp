@@ -35,7 +35,6 @@ float target_rpm   = 0.0f;
 bool movement      = false;
 bool magnet_near   = false;
 bool init          = false;
-bool initilized    = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;

@@ -30,11 +30,12 @@ constexpr float A_ROTATE_ANGLE           = 360.0f;
 
 // definitions
 float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
-bool movement      = true;
-bool magnet_near   = false;
 float rotate_count = 0.0f;
 float target_rpm   = 0.0f;
+bool movement      = false;
+bool magnet_near   = false;
 bool init          = false;
+bool initilized    = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;

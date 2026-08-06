@@ -34,10 +34,11 @@ bool movement      = true;
 bool magnet_near   = false;
 float rotate_count = 0.0f;
 float target_rpm   = 0.0f;
+bool init          = false;
 
 // Voltage threshold for hall sensor
-float voltage_threshold_high = 0.5f;
-float voltage_threshold_low  = 0.3f;
+float voltage_threshold_high = 1.8f;
+float voltage_threshold_low  = 1.6f;
 
 // LED config
 constexpr uint32_t k_heartbeat_toggle_interval_ms = 500;
@@ -109,16 +110,34 @@ void loop()
     // Control motor moving rpm
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
-    if (rotate_count > 6) {
+    if (rotate_count > 11) {
         movement = false;
     }
 
-    if (movement) {
+    if (movement && !init) {
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
     } else {
-        vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
-        vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
+        if (!magnet_near) {
+            vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
+            vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
+        } else if (!init) {
+            vesc.comm_can_set_rpm(45, 0);
+            vesc.comm_can_set_rpm(43, 0);
+            absolute_angle = 0.0f;
+            rotate_count   = 0.0f;
+            movement       = true;
+            init           = true;
+        }
+    }
+
+    if (init) {
+        if (rotate_count > 5) {
+            init = false;
+        } else {
+            vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
+            vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
+        }
     }
 
     // set anglar data for gn10 main

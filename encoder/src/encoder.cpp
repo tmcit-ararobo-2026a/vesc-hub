@@ -132,7 +132,7 @@ void loop()
     }
 
     if (init) {
-        if (rotate_count > 5) {
+        if (rotate_count > 5.8) {
             init = false;
         } else {
             vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);

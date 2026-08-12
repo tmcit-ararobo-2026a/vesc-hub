@@ -170,18 +170,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
     if (htim->Instance == TIM7) {
         float angle_now;
         float delta_angle;
-        float speed;
+        float initial_speed;
 
-        angle_now   = absolute_angle;
-        delta_angle = angle_now - angle_last;
-        speed       = ((delta_angle / A_ROTATE_ANGLE) * DISTANCE_PER_ROTATION) / 0.001f;
+        angle_now     = absolute_angle;
+        delta_angle   = angle_now - angle_last;
+        initial_speed = ((delta_angle / A_ROTATE_ANGLE) * DISTANCE_PER_ROTATION) / 0.001f;
 
         angle_last = angle_now;
 
         HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
-        float anglar_data[4] = {speed, 0.0f, 0.0f, 0.0f};
-        send_anglar_data(anglar_data);
+        float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
+
+        // send
+        if (rotate_count > 10.9f && movement) {
+            send_anglar_data(speed_data);
+        }
     }
+
     if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
         movement     = false;
         init         = false;

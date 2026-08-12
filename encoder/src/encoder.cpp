@@ -27,6 +27,7 @@ constexpr float RPM_CONVERSION_CONSTANT  = -46000.0f;
 constexpr float TARGET_RPM_INIT          = -2500.0f;
 constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
 constexpr float A_ROTATE_ANGLE           = 360.0f;
+constexpr float DISTANCE_PER_ROTATION    = 0.12f;
 
 // definitions
 float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -173,7 +174,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 
         angle_now   = absolute_angle;
         delta_angle = angle_now - angle_last;
-        speed       = ((delta_angle / A_ROTATE_ANGLE) * 0.12f) / 0.001f;
+        speed       = ((delta_angle / A_ROTATE_ANGLE) * DISTANCE_PER_ROTATION) / 0.001f;
 
         angle_last = angle_now;
 

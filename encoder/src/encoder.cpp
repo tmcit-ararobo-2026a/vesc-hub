@@ -34,9 +34,10 @@ float rotate_count = 0.0f;
 float target_rpm   = 0.0f;
 float angle_last   = 0.0f;
 
-bool movement    = false;
-bool magnet_near = false;
-bool init        = false;
+bool movement     = false;
+bool magnet_near  = false;
+bool init         = false;
+bool init_command = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -136,7 +137,8 @@ void loop()
 
     if (init) {
         if (rotate_count > 5.8) {
-            init = false;
+            init         = false;
+            init_command = true;
         } else {
             vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
             vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
@@ -161,7 +163,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
     }
 }
 
-extern "C" {
+// send_data
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
     if (htim->Instance == TIM7) {
@@ -179,7 +181,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
         float anglar_data[4] = {speed, 0.0f, 0.0f, 0.0f};
         send_anglar_data(anglar_data);
     }
-}
+    if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
+        movement     = false;
+        init         = false;
+        init_command = false;
+    }
 }
 
 /**

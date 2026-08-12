@@ -108,6 +108,7 @@ int main(void)
   MX_ICACHE_Init();
   MX_DCACHE1_Init();
   MX_ADC1_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
     setup();
   /* USER CODE END 2 */

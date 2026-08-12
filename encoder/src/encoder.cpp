@@ -29,12 +29,13 @@ constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
 constexpr float A_ROTATE_ANGLE           = 360.0f;
 
 // definitions
-float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
-float rotate_count = 0.0f;
-float target_rpm   = 0.0f;
-bool movement      = false;
-bool magnet_near   = false;
-bool init          = false;
+float vesc_vel[4]   = {0.0f, 0.0f, 0.0f, 0.0f};
+float rotate_count  = 0.0f;
+float target_rpm    = 0.0f;
+float encoder_angle = 0.0f;
+bool movement       = false;
+bool magnet_near    = false;
+bool init           = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -57,6 +58,8 @@ void setup()
     // encoder settings
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
     __HAL_TIM_SET_COUNTER(&htim3, 0);
+
+    HAL_TIM_Base_Start(&htim7);
 
     // init
     fdcan1_driver.init();
@@ -87,7 +90,7 @@ void loop()
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    float encoder_angle = encoder_count * (A_ROTATE_ANGLE / ENCODER_COUNT_PER_ROTATE);
+    encoder_angle = encoder_count * (A_ROTATE_ANGLE / ENCODER_COUNT_PER_ROTATE);
 
     // absolute
     absolute_angle += encoder_angle;
@@ -140,11 +143,6 @@ void loop()
         }
     }
 
-    // set anglar data for gn10 main
-    float anglar_data[4] = {rotate_count, 0.0f, encoder_angle, absolute_angle};
-
-    send_anglar_data(anglar_data);
-
     update_heartbeat_led();
 }
 
@@ -161,6 +159,23 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
             vesc.receive_data(rx_header.Identifier, rx_data, 8);
         }
     }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim7)
+{
+    float angle_last = 0.0f;
+    float angle_now;
+    float delta_angle;
+    float speed;
+
+    angle_now   = absolute_angle;
+    delta_angle = angle_now - angle_last;
+    speed       = delta_angle / 1000000.0f;
+
+    angle_last = angle_now;
+
+    float anglar_data[4] = {speed, 0.0f, 0.0f, 0.0f};
+    send_anglar_data(anglar_data);
 }
 
 /**

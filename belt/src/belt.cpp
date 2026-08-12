@@ -1,9 +1,9 @@
-#include "encoder/encoder.hpp"
+#include "belt/belt.hpp"
 
 #include "adc.h"
+#include "belt/fdcan_driver.hpp"
+#include "belt/vesc_can.hpp"
 #include "drivers/stm32_fdcan/driver_stm32_fdcan.hpp"
-#include "encoder/fdcan_driver.hpp"
-#include "encoder/vesc_can.hpp"
 #include "gn10_can/core/can_bus.hpp"
 #include "gn10_can/core/fdcan_bus.hpp"
 #include "gn10_can/devices/esc_hub_server.hpp"

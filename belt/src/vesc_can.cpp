@@ -1,4 +1,4 @@
-#include "encoder/vesc_can.hpp"
+#include "belt/vesc_can.hpp"
 
 VescCAN::VescCAN(FDCAN_HandleTypeDef* hfdcan) : hfdcan_(hfdcan) {}
 

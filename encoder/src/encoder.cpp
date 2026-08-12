@@ -149,7 +149,7 @@ void loop()
     update_heartbeat_led();
 }
 
-// Callback processing
+// CAN Receive CAllback
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 {
     if (hfdcan->Instance == hfdcan1.Instance) {

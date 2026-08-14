@@ -88,6 +88,12 @@ void loop()
     // get command
     esc_hub.get_angular_velocities(vesc_vel);
 
+    if (vesc_vel[0] > 1.0f) {
+        vesc_vel[0] = 1.0f;
+    } else if (vesc_vel[0] < 0.0f) {
+        vesc_vel[0] = 0;
+    }
+
     // encoder
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
@@ -115,7 +121,7 @@ void loop()
     // Control motor moving rpm
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
-    if (rotate_count > 11.5) {
+    if (rotate_count > 11.8) {
         movement = false;
     }
 
@@ -182,7 +188,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
         float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
 
         // send
-        if (rotate_count > 11.4f && movement) {
+        if (rotate_count > 11.7f && movement) {
             send_anglar_data(speed_data);
         }
     }

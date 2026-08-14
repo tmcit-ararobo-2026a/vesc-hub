@@ -115,7 +115,7 @@ void loop()
     // Control motor moving rpm
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
-    if (rotate_count > 11) {
+    if (rotate_count > 11.5) {
         movement = false;
     }
 
@@ -182,7 +182,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
         float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
 
         // send
-        if (rotate_count > 10.9f && movement) {
+        if (rotate_count > 11.4f && movement) {
             send_anglar_data(speed_data);
         }
     }

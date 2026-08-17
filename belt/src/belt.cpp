@@ -39,6 +39,7 @@ bool movement     = false;
 bool magnet_near  = false;
 bool init         = false;
 bool init_command = false;
+bool error        = false;
 
 // Voltage threshold for hall sensor
 float voltage_threshold_high = 1.8f;
@@ -121,7 +122,7 @@ void loop()
     // Control motor moving rpm
     target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
 
-    if (rotate_count > 11.8) {
+    if (rotate_count > 11.6) {
         movement = false;
     }
 
@@ -143,7 +144,7 @@ void loop()
     }
 
     if (init) {
-        if (rotate_count > 5.8) {
+        if (rotate_count > 5.7) {
             init         = false;
             init_command = true;
         } else {
@@ -188,7 +189,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
         float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
 
         // send
-        if (rotate_count > 11.7f && movement) {
+        if (rotate_count > 11.4f && movement) {
             send_anglar_data(speed_data);
         }
     }
@@ -197,6 +198,28 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
         movement     = false;
         init         = false;
         init_command = false;
+    }
+}
+
+void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef* hfdcan, uint32_t ErrorStatusITs)
+{
+    if (hfdcan->Instance == hfdcan2.Instance && (ErrorStatusITs & FDCAN_IT_BUS_OFF)) {
+        HAL_FDCAN_Stop(&hfdcan2);
+        error = true;
+    }
+}
+
+void try_recover_vesc_bus()
+{
+    if (error) {
+        HAL_FDCAN_Start(&hfdcan2);
+        HAL_FDCAN_ActivateNotification(
+            &hfdcan2,
+            FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_PASSIVE |
+                FDCAN_IT_ERROR_WARNING,
+            0
+        );
+        error = false;
     }
 }
 
@@ -209,6 +232,7 @@ void update_heartbeat_led()
     if ((now_ms - heartbeat_last_toggle_time_ms) >= k_heartbeat_toggle_interval_ms) {
         heartbeat_last_toggle_time_ms = now_ms;
         HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
+        try_recover_vesc_bus();
     }
 }
 

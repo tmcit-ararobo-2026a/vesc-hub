@@ -1,4 +1,4 @@
-#include "encoder/fdcan_driver.hpp"
+#include "belt/fdcan_driver.hpp"
 
 namespace gn10_can {
 namespace drivers {

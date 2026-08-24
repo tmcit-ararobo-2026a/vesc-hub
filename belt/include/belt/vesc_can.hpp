@@ -51,10 +51,7 @@ public:
     void receive_data(uint32_t can_id, uint8_t* data, uint8_t len);
     void buffer_append_int16(uint8_t* buffer, int16_t number, int32_t* index);
     void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t* index);
-
-    void set_timeout_ms(
-        FDCAN_HandleTypeDef* hfdcan, uint32_t TimeoutOperation, uint32_t TimeoutPeriod
-    );
+    ;
 
     void buffer_append_float16(uint8_t* buffer, float number, float scale, int32_t* index);
 

@@ -25,12 +25,7 @@ void VescCAN::init()
         Error_Handler();
     }
     // 割り込み有効
-    if (HAL_FDCAN_ActivateNotification(
-            hfdcan_,
-            FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_PASSIVE |
-                FDCAN_IT_ERROR_WARNING,
-            0
-        ) != HAL_OK) {
+    if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
         Error_Handler();
     }
 }
@@ -48,7 +43,6 @@ void VescCAN::send_data(uint32_t can_id, uint8_t* data, uint8_t len)
     txheader.TxFrameType         = FDCAN_DATA_FRAME;
     // wait until TxFIFO free(TxFIFO is 送信待ち行列)
     while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan_) == 0);
-
     if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan_, &txheader, data) != HAL_OK) {
         Error_Handler();
     }

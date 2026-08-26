@@ -86,7 +86,7 @@ void setup()
 void loop()
 {
     // get command
-    esc_hub.get_angular_velocities(vesc_vel);
+    esc_hub.get_targets(vesc_vel);
 
     if (vesc_vel[0] > 1.0f) {
         vesc_vel[0] = 1.0f;
@@ -220,7 +220,7 @@ void send_anglar_data(float angular_data[4])
     const uint32_t now_ms = HAL_GetTick();
     if ((now_ms - send_anglar_data_last_time_ms) >= k_send_anglar_data_interval_ms) {
         send_anglar_data_last_time_ms = now_ms;
-        esc_hub.set_angular_velocity_feedbacks(angular_data);
-        HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
+        esc_hub.set_feedbacks(angular_data);
+        HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
     }
 }

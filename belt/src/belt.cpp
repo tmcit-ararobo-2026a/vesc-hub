@@ -31,6 +31,7 @@ constexpr float DISTANCE_PER_ROTATION    = 0.12f;
 
 // definitions
 float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
+float send_data[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 float rotate_count = 0.0f;
 float target_rpm   = 0.0f;
 float angle_last   = 0.0f;
@@ -136,6 +137,7 @@ void loop()
             vesc.comm_can_set_rpm(45, 0);
             vesc.comm_can_set_rpm(43, 0);
             absolute_angle = 0.0f;
+            angle_last     = 0.0f;
             rotate_count   = 0.0f;
             movement       = true;
             init           = true;
@@ -146,6 +148,7 @@ void loop()
         if (rotate_count > 5.8) {
             init         = false;
             init_command = true;
+            send_anglar_data(send_data);
         } else {
             vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
             vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
@@ -189,7 +192,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 
         // send
         if (rotate_count > 11.7f && movement) {
-            send_anglar_data(speed_data);
+            for (uint8_t i = 0; i < 4; i++) {
+                send_data[i] = speed_data[i];
+            }
         }
     }
 

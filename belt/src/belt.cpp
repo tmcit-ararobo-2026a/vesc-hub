@@ -42,8 +42,8 @@ bool init         = false;
 bool init_command = false;
 
 // Voltage threshold for hall sensor
-float voltage_threshold_high = 1.8f;
-float voltage_threshold_low  = 1.6f;
+float voltage_threshold_high = 2.0f;
+float voltage_threshold_low  = 1.8f;
 
 // LED config
 constexpr uint32_t k_heartbeat_toggle_interval_ms = 500;

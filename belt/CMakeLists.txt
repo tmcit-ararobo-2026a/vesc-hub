@@ -7,14 +7,11 @@ add_library(belt STATIC
     src/app.cpp
     src/vesc_can.cpp
     src/fdcan_driver.cpp
-    ${CMAKE_SOURCE_DIR}/gn10-can/drivers/stm32_fdcan/driver_stm32_fdcan.cpp
-
-    
+    src/can_driver.cpp
 )
 
 target_include_directories(belt PUBLIC
-    include
-    ${CMAKE_SOURCE_DIR}/gn10-can        
+    include     
 )
 target_link_libraries(belt PRIVATE stm32cubemx)
 target_link_libraries(belt PUBLIC gn10_can)

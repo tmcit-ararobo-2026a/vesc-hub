@@ -1,54 +1,7 @@
 #include "belt/vesc_can.hpp"
 
-VescCAN::VescCAN(FDCAN_HandleTypeDef* hfdcan) : hfdcan_(hfdcan) {}
+VescCAN::VescCAN(gn10_can::drivers::ICANDriver& can_driver) : can_driver_(can_driver) {}
 
-void VescCAN::init()
-{
-    /*
-    HAL_FDCAN_ConfigGlobalFilter(
-        hfdcan_,
-        FDCAN_ACCEPT_IN_RX_FIFO0,  // 標準ID：一致しなくても受け取る　あとからかえる
-        FDCAN_ACCEPT_IN_RX_FIFO0,  // 拡張ID：一致しなくても受け取る
-        FDCAN_FILTER_REMOTE,       // リモート標準：フィルタを通す　あとからかえる
-        FDCAN_FILTER_REMOTE        // リモート拡張：フィルタを通す
-    );*/
-    rxfilter.IdType       = FDCAN_EXTENDED_ID;
-    rxfilter.FilterType   = FDCAN_FILTER_MASK;  // 要相談
-    rxfilter.FilterIndex  = 0;
-    rxfilter.FilterID1    = 0x0000;
-    rxfilter.FilterID2    = 0x1FFF;
-    rxfilter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-    // フィルタ設定
-    if (HAL_FDCAN_ConfigFilter(hfdcan_, &rxfilter) != HAL_OK) {
-        Error_Handler();
-    }
-    if (HAL_FDCAN_Start(hfdcan_) != HAL_OK) {
-        Error_Handler();
-    }
-    // 割り込み有効
-    if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
-        Error_Handler();
-    }
-}
-
-bool VescCAN::send_data(uint32_t can_id, uint8_t* data, uint8_t len)
-{
-    txheader.BitRateSwitch       = FDCAN_BRS_OFF;
-    txheader.DataLength          = len;
-    txheader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    txheader.FDFormat            = FDCAN_CLASSIC_CAN;
-    txheader.Identifier          = can_id;
-    txheader.IdType              = FDCAN_EXTENDED_ID;
-    txheader.MessageMarker       = 0;
-    txheader.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
-    txheader.TxFrameType         = FDCAN_DATA_FRAME;
-    // wait until TxFIFO free(TxFIFO is 送信待ち行列)
-    while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan_) == 0);
-    if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan_, &txheader, data) != HAL_OK) {
-        return false;
-    }
-    return true;
-}
 void VescCAN::parse_status1(uint8_t* data, VescStatus1& status)
 {
     status.rpm     = (int32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
@@ -62,17 +15,19 @@ void VescCAN::parse_status5(uint8_t* data, VescStatus5& status)
     status.voltage = (int16_t)((data[4] << 8) | data[5]) / 10.0f;
 }
 
-void VescCAN::receive_data(uint32_t can_id, uint8_t* data, uint8_t len)
+void VescCAN::update()
 {
-    uint8_t packet_id = (can_id >> 8) & 0xFF;
+    gn10_can::CANFrame out_frame;
+    can_driver_.receive(out_frame);
+    uint8_t packet_id = (out_frame.id >> 8) & 0xFF;
 
     // rpm feedback
     if (packet_id == CAN_PACKET_STATUS) {
-        parse_status1(data, status1_);
+        parse_status1(out_frame.data.data(), status1_);
     }
     // taco feedback
     if (packet_id == CAN_PACKET_STATUS_5) {  // 追加
-        parse_status5(data, status5_);
+        parse_status5(out_frame.data.data(), status5_);
     }
 }
 
@@ -105,63 +60,74 @@ void VescCAN::buffer_append_float32(uint8_t* buffer, float number, float scale, 
 void VescCAN::comm_can_set_duty(uint8_t controller_id, float duty)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_int32(buffer, (int32_t)(duty * 100000.0), &send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_int32(frame.data.data(), (int32_t)(duty * 100000.0), &send_index);
 
-    uint32_t can_id_duty = controller_id | ((uint32_t)CAN_PACKET_SET_DUTY << 8);
-
-    send_data(can_id_duty, buffer, send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_DUTY << 8);
+    frame.set_data_length(sizeof(int32_t));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_current(uint8_t controller_id, float current)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_int32(buffer, (int32_t)(current * 1000.0), &send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_int32(frame.data.data(), (int32_t)(current * 1000.0), &send_index);
 
-    uint32_t can_id_current = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT << 8);
-    send_data(can_id_current, buffer, send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT << 8);
+    frame.set_data_length(sizeof(int32_t));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_current_off_delay(uint8_t controller_id, float current, float off_delay)
 {
     int32_t send_index = 0;
-    uint8_t buffer[6];
-    buffer_append_int32(buffer, (int32_t)(current * 1000.0), &send_index);
-    buffer_append_float16(buffer, off_delay, 1e3, &send_index);
-    send_data(controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT << 8), buffer, send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_int32(frame.data.data(), (int32_t)(current * 1000.0), &send_index);
+    buffer_append_float16(frame.data.data(), off_delay, 1e3, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT << 8);
+    frame.set_data_length(6);
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_current_brake(uint8_t controller_id, float current)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_int32(buffer, (int32_t)(current * 1000.0), &send_index);
-    send_data(controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8), buffer, send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_int32(frame.data.data(), (int32_t)(current * 1000.0), &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8);
+    frame.set_data_length(sizeof(int32_t));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_rpm(uint8_t controller_id, float rpm)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_int32(buffer, (int32_t)rpm, &send_index);
-    send_data(controller_id | ((uint32_t)CAN_PACKET_SET_RPM << 8), buffer, send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_int32(frame.data.data(), (int32_t)rpm, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_RPM << 8);
+    frame.set_data_length(sizeof(int32_t));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_pos(uint8_t controller_id, float pos)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_int32(buffer, (int32_t)(pos * 1000000.0), &send_index);
-    send_data(controller_id | ((uint32_t)CAN_PACKET_SET_POS << 8), buffer, send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_int32(frame.data.data(), (int32_t)(pos * 1000000.0), &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_POS << 8);
+    frame.set_data_length(sizeof(int32_t));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_current_rel(uint8_t controller_id, float current_rel)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_float32(buffer, current_rel, 1e5, &send_index);
-    send_data(controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_REL << 8), buffer, send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_REL << 8);
+    frame.set_data_length(sizeof(float));
+    can_driver_.send(frame);
 }
 
 /**
@@ -174,39 +140,41 @@ void VescCAN::comm_can_set_current_rel_off_delay(
 )
 {
     int32_t send_index = 0;
-    uint8_t buffer[6];
-    buffer_append_float32(buffer, current_rel, 1e5, &send_index);
-    buffer_append_float16(buffer, off_delay, 1e3, &send_index);
-    send_data(controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_REL << 8), buffer, send_index);
+    gn10_can::CANFrame frame;
+    buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
+    buffer_append_float16(frame.data.data(), off_delay, 1e3, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_REL << 8);
+    frame.set_data_length(6);
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_current_brake_rel(uint8_t controller_id, float current_rel)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_float32(buffer, current_rel, 1e5, &send_index);
-    send_data(
-        controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE_REL << 8), buffer, send_index
-    );
+    gn10_can::CANFrame frame;
+    buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE_REL << 8);
+    frame.set_data_length(sizeof(float));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_handbrake(uint8_t controller_id, float current)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_float32(buffer, current, 1e3, &send_index);
-    send_data(
-        controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_HANDBRAKE << 8), buffer, send_index
-    );
+    gn10_can::CANFrame frame;
+    buffer_append_float32(frame.data.data(), current, 1e3, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_HANDBRAKE << 8);
+    frame.set_data_length(sizeof(float));
+    can_driver_.send(frame);
 }
 
 void VescCAN::comm_can_set_handbrake_rel(uint8_t controller_id, float current_rel)
 {
     int32_t send_index = 0;
-    uint8_t buffer[4];
-    buffer_append_float32(buffer, current_rel, 1e5, &send_index);
-    send_data(
-        controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_HANDBRAKE_REL << 8), buffer, send_index
-    );
+    gn10_can::CANFrame frame;
+    buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_HANDBRAKE_REL << 8);
+    frame.set_data_length(sizeof(float));
+    can_driver_.send(frame);
 }
 // 0x1FFFFFFF

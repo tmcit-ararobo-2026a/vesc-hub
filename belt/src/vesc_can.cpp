@@ -4,18 +4,19 @@ VescCAN::VescCAN(FDCAN_HandleTypeDef* hfdcan) : hfdcan_(hfdcan) {}
 
 void VescCAN::init()
 {
+    /*
     HAL_FDCAN_ConfigGlobalFilter(
         hfdcan_,
         FDCAN_ACCEPT_IN_RX_FIFO0,  // 標準ID：一致しなくても受け取る　あとからかえる
         FDCAN_ACCEPT_IN_RX_FIFO0,  // 拡張ID：一致しなくても受け取る
         FDCAN_FILTER_REMOTE,       // リモート標準：フィルタを通す　あとからかえる
         FDCAN_FILTER_REMOTE        // リモート拡張：フィルタを通す
-    );
+    );*/
     rxfilter.IdType       = FDCAN_EXTENDED_ID;
-    rxfilter.FilterType   = FDCAN_FILTER_RANGE_NO_EIDM;  // 要相談
+    rxfilter.FilterType   = FDCAN_FILTER_MASK;  // 要相談
     rxfilter.FilterIndex  = 0;
-    rxfilter.FilterID1    = 0x00000000;
-    rxfilter.FilterID2    = 0x1FFFFFFF;
+    rxfilter.FilterID1    = 0x0000;
+    rxfilter.FilterID2    = 0x1FFF;
     rxfilter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
     // フィルタ設定
     if (HAL_FDCAN_ConfigFilter(hfdcan_, &rxfilter) != HAL_OK) {

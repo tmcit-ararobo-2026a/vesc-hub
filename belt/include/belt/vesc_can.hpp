@@ -46,7 +46,7 @@ public:
 
     VescCAN(FDCAN_HandleTypeDef* hfdcan);
     void init();
-    void send_data(uint32_t can_id, uint8_t* data, uint8_t len);
+    bool send_data(uint32_t can_id, uint8_t* data, uint8_t len);
     void can_callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs);
     void receive_data(uint32_t can_id, uint8_t* data, uint8_t len);
     void buffer_append_int16(uint8_t* buffer, int16_t number, int32_t* index);

@@ -172,6 +172,20 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
     }
 }
 
+void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo1ITs)
+{
+    if (hfdcan->Instance == hfdcan1.Instance) {
+        fdcan1_bus.update();
+    }
+    if (hfdcan->Instance == hfdcan2.Instance) {
+        FDCAN_RxHeaderTypeDef rx_header;
+        uint8_t rx_data[8];
+        if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data) == HAL_OK) {
+            vesc.receive_data(rx_header.Identifier, rx_data, 8);
+        }
+    }
+}
+
 // send_data
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {

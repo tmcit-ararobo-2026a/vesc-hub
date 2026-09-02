@@ -39,7 +39,6 @@ private:
     VescStatus5 status5_;
 
 public:
-    VescCAN(uint8_t controller_id);
     void parse_status1(uint8_t* data, VescStatus1& status);
 
     void parse_status5(uint8_t* data, VescStatus5& status);  // 追加

@@ -31,7 +31,7 @@ void VescCAN::init()
     }
 }
 
-void VescCAN::send_data(uint32_t can_id, uint8_t* data, uint8_t len)
+bool VescCAN::send_data(uint32_t can_id, uint8_t* data, uint8_t len)
 {
     txheader.BitRateSwitch       = FDCAN_BRS_OFF;
     txheader.DataLength          = len;
@@ -45,8 +45,9 @@ void VescCAN::send_data(uint32_t can_id, uint8_t* data, uint8_t len)
     // wait until TxFIFO free(TxFIFO is 送信待ち行列)
     while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan_) == 0);
     if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan_, &txheader, data) != HAL_OK) {
-        Error_Handler();
+        return false;
     }
+    return true;
 }
 void VescCAN::parse_status1(uint8_t* data, VescStatus1& status)
 {

@@ -1,4 +1,4 @@
-#include "belt/belt.hpp"
+#include "belt/app.hpp"
 
 #include "adc.h"
 #include "belt/fdcan_driver.hpp"
@@ -126,7 +126,7 @@ void loop()
         movement = false;
     }
 
-    if (movement && !init) {
+        if (movement && !init) {
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
     } else {

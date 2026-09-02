@@ -1,4 +1,4 @@
-#include "belt/belt.hpp"
+#include "belt/app.hpp"
 
 #include "adc.h"
 #include "belt/fdcan_driver.hpp"

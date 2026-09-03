@@ -11,6 +11,8 @@
 #include "gn10_stm32_fdcan_driver/fdcan_driver.hpp"
 #include "tim.h"
 
+#define VESC_ID 43  // 43 or 45
+
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
@@ -130,15 +132,11 @@ void loop()
     }
 
     if (movement && !init) {
-        vesc.comm_can_set_rpm(45, target_rpm);
-        vesc.comm_can_set_rpm(43, target_rpm);
     } else {
         if (!magnet_near) {
-            vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
-            vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
+            target_rpm = TARGET_RPM_INIT;
         } else if (!init) {
-            vesc.comm_can_set_rpm(45, 0);
-            vesc.comm_can_set_rpm(43, 0);
+            target_rpm     = 0.0f;
             absolute_angle = 0.0f;
             angle_last     = 0.0f;
             rotate_count   = 0.0f;
@@ -152,8 +150,7 @@ void loop()
             init         = false;
             init_command = true;
         } else {
-            vesc.comm_can_set_rpm(43, TARGET_RPM_INIT);
-            vesc.comm_can_set_rpm(45, TARGET_RPM_INIT);
+            target_rpm = TARGET_RPM_INIT;
         }
     }
 

@@ -5,10 +5,19 @@
 namespace gn10_can {
 namespace drivers {
 
+void FDCANDriver::set_init_extended_id()
+{
+    enable_extended = true;
+}
+
 bool FDCANDriver::init()
 {
     FDCAN_FilterTypeDef filter;
-    filter.IdType       = FDCAN_STANDARD_ID;
+    if (enable_extended) {
+        filter.IdType = FDCAN_EXTENDED_ID;
+    } else {
+        filter.IdType = FDCAN_STANDARD_ID;
+    }
     filter.FilterIndex  = 0;
     filter.FilterType   = FDCAN_FILTER_MASK;
     filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;

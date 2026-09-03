@@ -1,12 +1,21 @@
-#include "gn10_mainboard/can_driver.hpp"
+#include "belt/can_driver.hpp"
 
 namespace gn10_can {
 namespace drivers {
 
+void CANDriver::set_init_extended_id()
+{
+    enable_extended = true;
+}
+
 bool CANDriver::init()
 {
     FDCAN_FilterTypeDef filter;
-    filter.IdType       = FDCAN_STANDARD_ID;
+    if (enable_extended) {
+        filter.IdType = FDCAN_EXTENDED_ID;
+    } else {
+        filter.IdType = FDCAN_STANDARD_ID;
+    }
     filter.FilterIndex  = 0;
     filter.FilterType   = FDCAN_FILTER_MASK;
     filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;

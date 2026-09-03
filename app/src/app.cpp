@@ -92,8 +92,14 @@ void setup()
 
 void loop()
 {
-    // get command
+    // 司令を受信
     esc_hub.get_targets(vesc_vel);
+
+    if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
+        movement     = false;
+        init         = false;
+        init_command = false;
+    }
 
     if (vesc_vel[0] > 1.0f) {
         vesc_vel[0] = 1.0f;
@@ -194,12 +200,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
         if (rotate_count > 11.4f && movement) {
             send_anglar_data(speed_data);
         }
-    }
-
-    if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
-        movement     = false;
-        init         = false;
-        init_command = false;
     }
 }
 

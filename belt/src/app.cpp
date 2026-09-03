@@ -68,6 +68,7 @@ void setup()
     HAL_TIM_Base_Start_IT(&htim7);
     // init
     fdcan1_driver.init();
+    can2_driver.set_init_extended_id();
     can2_driver.init();
 
     // set tick

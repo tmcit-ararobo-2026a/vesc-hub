@@ -2,6 +2,8 @@
 #include <cstdint>
 
 #include "fdcan.h"
+#include "gn10_can/drivers/can_driver_interface.hpp"
+
 typedef enum {
     CAN_PACKET_SET_DUTY = 0,
     CAN_PACKET_SET_CURRENT,
@@ -29,26 +31,16 @@ private:
         int32_t taco;
         float voltage;
     };
-
-    FDCAN_RxHeaderTypeDef rxheader;
-    FDCAN_FilterTypeDef rxfilter;
-    FDCAN_TxHeaderTypeDef txheader;
-    uint8_t rxdata[8];
-    FDCAN_HandleTypeDef* hfdcan_;
     VescStatus1 status1_;
     VescStatus5 status5_;
 
 public:
-    VescCAN(uint8_t controller_id);
     void parse_status1(uint8_t* data, VescStatus1& status);
 
     void parse_status5(uint8_t* data, VescStatus5& status);  // 追加
 
-    VescCAN(FDCAN_HandleTypeDef* hfdcan);
-    void init();
-    bool send_data(uint32_t can_id, uint8_t* data, uint8_t len);
-    void can_callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs);
-    void receive_data(uint32_t can_id, uint8_t* data, uint8_t len);
+    explicit VescCAN(gn10_can::drivers::ICANDriver& can_driver);
+    void update();
     void buffer_append_int16(uint8_t* buffer, int16_t number, int32_t* index);
     void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t* index);
     ;
@@ -89,4 +81,6 @@ public:
     }
 
     void comm_can_set_handbrake_rel(uint8_t controller_id, float current_rel);
+
+    gn10_can::drivers::ICANDriver& can_driver_;
 };

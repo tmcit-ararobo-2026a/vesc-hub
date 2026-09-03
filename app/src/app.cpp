@@ -1,9 +1,10 @@
-#include "belt/app.hpp"
+#include "app/app.hpp"
 
 #include "adc.h"
-#include "belt/fdcan_driver.hpp"
-#include "belt/vesc_can.hpp"
-#include "drivers/stm32_fdcan/driver_stm32_fdcan.hpp"
+#include "app/can_callback_helper.hpp"
+#include "app/can_driver.hpp"
+#include "app/fdcan_driver.hpp"
+#include "app/vesc_can.hpp"
 #include "gn10_can/core/can_bus.hpp"
 #include "gn10_can/core/fdcan_bus.hpp"
 #include "gn10_can/devices/esc_hub_server.hpp"
@@ -19,7 +20,9 @@ gn10_can::devices::MotorConfig motor_config_belt;
 uint8_t motor_id = 0;
 
 // vesc
-VescCAN vesc(&hfdcan2);
+gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
+VescCAN vesc(can2_driver);
+
 float absolute_angle;
 
 // constants
@@ -66,7 +69,7 @@ void setup()
     HAL_TIM_Base_Start_IT(&htim7);
     // init
     fdcan1_driver.init();
-    vesc.init();
+    can2_driver.init();
 
     // set tick
     send_anglar_data_last_time_ms = HAL_GetTick();
@@ -126,7 +129,7 @@ void loop()
         movement = false;
     }
 
-        if (movement && !init) {
+    if (movement && !init) {
         vesc.comm_can_set_rpm(45, target_rpm);
         vesc.comm_can_set_rpm(43, target_rpm);
     } else {
@@ -160,30 +163,16 @@ void loop()
 // CAN Receive CAllback
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 {
-    if (hfdcan->Instance == hfdcan1.Instance) {
-        fdcan1_bus.update();
-    }
-    if (hfdcan->Instance == hfdcan2.Instance) {
-        FDCAN_RxHeaderTypeDef rx_header;
-        uint8_t rx_data[8];
-        if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data) == HAL_OK) {
-            vesc.receive_data(rx_header.Identifier, rx_data, 8);
-        }
-    }
+    (void)RxFifo0ITs;
+    if (process_fdcan_fifo(hfdcan, &hfdcan1, fdcan1_bus, FDCAN_RX_FIFO0)) return;
+    if (process_fdcan_fifo(hfdcan, &hfdcan2, vesc, FDCAN_RX_FIFO0)) return;
 }
 
 void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo1ITs)
 {
-    if (hfdcan->Instance == hfdcan1.Instance) {
-        fdcan1_bus.update();
-    }
-    if (hfdcan->Instance == hfdcan2.Instance) {
-        FDCAN_RxHeaderTypeDef rx_header;
-        uint8_t rx_data[8];
-        if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data) == HAL_OK) {
-            vesc.receive_data(rx_header.Identifier, rx_data, 8);
-        }
-    }
+    (void)RxFifo1ITs;
+    if (process_fdcan_fifo(hfdcan, &hfdcan1, fdcan1_bus, FDCAN_RX_FIFO1)) return;
+    if (process_fdcan_fifo(hfdcan, &hfdcan2, vesc, FDCAN_RX_FIFO1)) return;
 }
 
 // send_data

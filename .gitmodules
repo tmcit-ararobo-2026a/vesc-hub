@@ -1,3 +1,6 @@
 [submodule "gn10-can"]
 	path = gn10-can
 	url = https://github.com/ararobo/gn10-can.git
+[submodule "gn10-stm32-fdcan-driver"]
+	path = gn10-stm32-fdcan-driver
+	url = https://github.com/ararobo/gn10-stm32-fdcan-driver.git

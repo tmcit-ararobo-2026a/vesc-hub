@@ -36,7 +36,6 @@ constexpr float DISTANCE_PER_ROTATION    = 0.12f;
 
 // definitions
 float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
-float send_data[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 float rotate_count = 0.0f;
 float target_rpm   = 0.0f;
 float angle_last   = 0.0f;

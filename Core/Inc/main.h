@@ -79,8 +79,6 @@ void Error_Handler(void);
 #define FLASH_IO0_GPIO_Port GPIOB
 #define FLASH_CLK_Pin GPIO_PIN_2
 #define FLASH_CLK_GPIO_Port GPIOB
-#define FLASH_SS_Pin GPIO_PIN_10
-#define FLASH_SS_GPIO_Port GPIOB
 #define LIM1_1_Pin GPIO_PIN_14
 #define LIM1_1_GPIO_Port GPIOB
 #define LIM1_1_EXTI_IRQn EXTI14_IRQn

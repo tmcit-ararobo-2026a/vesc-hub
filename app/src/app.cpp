@@ -94,14 +94,13 @@ void loop()
 {
     // 司令を受信
     esc_hub.get_targets(vesc_vel);
+    vesc_vel[0] = std::clamp(vesc_vel[0], 0.0f, 1.0f);
 
     if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
         movement     = false;
         init         = false;
         init_command = false;
     }
-
-    vesc_vel[0] = std::clamp(vesc_vel[0], 0.0f, 1.0f);
 
     // encoder
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));

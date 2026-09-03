@@ -12,6 +12,8 @@
 #include "tim.h"
 
 #define VESC_ID 43  // 43 or 45
+volatile bool timer_1khz_triggered;
+volatile bool timer_100hz_triggered;
 
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
@@ -60,7 +62,28 @@ uint32_t send_anglar_data_last_time_ms            = 0;
 // setting function
 void update_heartbeat_led();
 void send_anglar_data(float angular_data[4]);
+void timer_1khz_process()
+{
+    float angle_now;
+    float delta_angle;
+    float initial_speed;
 
+    angle_now     = absolute_angle;
+    delta_angle   = angle_now - angle_last;
+    initial_speed = ((delta_angle / A_ROTATE_ANGLE) * DISTANCE_PER_ROTATION) / 0.001f;
+
+    angle_last = angle_now;
+
+    HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
+    float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
+
+    // send
+    if (rotate_count > 11.4f && movement) {
+        send_anglar_data(speed_data);
+    }
+}
+
+void timer_100hz_process() {}
 void setup()
 {
     // encoder settings
@@ -153,7 +176,14 @@ void loop()
             target_rpm = TARGET_RPM_INIT;
         }
     }
-
+    if (timer_100hz_triggered) {
+        timer_100hz_triggered = false;
+        timer_100hz_process();
+    }
+    if (timer_1khz_triggered) {
+        timer_1khz_triggered = false;
+        timer_1khz_process();
+    }
     update_heartbeat_led();
 }
 
@@ -172,27 +202,16 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo1ITs)
     if (process_fdcan_fifo(hfdcan, &hfdcan2, vesc, FDCAN_RX_FIFO1)) return;
 }
 
-// send_data
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
+    // 100Hz
+    if (htim->Instance == TIM6) {
+        timer_100hz_triggered = true;
+    }
+
+    // 1kHz
     if (htim->Instance == TIM7) {
-        float angle_now;
-        float delta_angle;
-        float initial_speed;
-
-        angle_now     = absolute_angle;
-        delta_angle   = angle_now - angle_last;
-        initial_speed = ((delta_angle / A_ROTATE_ANGLE) * DISTANCE_PER_ROTATION) / 0.001f;
-
-        angle_last = angle_now;
-
-        HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
-        float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
-
-        // send
-        if (rotate_count > 11.4f && movement) {
-            send_anglar_data(speed_data);
-        }
+        timer_1khz_triggered = true;
     }
 }
 

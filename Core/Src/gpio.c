@@ -33,6 +33,12 @@
 /* USER CODE END 1 */
 
 /** Configure pins
+     PA3   ------> S_TIM2_CH4
+     PA6   ------> OCTOSPI1_IO3
+     PA7   ------> OCTOSPI1_IO2
+     PB0   ------> OCTOSPI1_IO1
+     PB1   ------> OCTOSPI1_IO0
+     PB2   ------> OCTOSPI1_CLK
      PA13(JTMS/SWDIO)   ------> DEBUG_JTMS-SWDIO
 */
 void MX_GPIO_Init(void)
@@ -65,6 +71,46 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Synchronization_clock_Pin */
+  GPIO_InitStruct.Pin = Synchronization_clock_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
+  HAL_GPIO_Init(Synchronization_clock_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : FLASH_IO3_Pin */
+  GPIO_InitStruct.Pin = FLASH_IO3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF6_OCTOSPI1;
+  HAL_GPIO_Init(FLASH_IO3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : FLASH_IO2_Pin */
+  GPIO_InitStruct.Pin = FLASH_IO2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF10_OCTOSPI1;
+  HAL_GPIO_Init(FLASH_IO2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : FLASH_IO1_Pin FLASH_IO0_Pin */
+  GPIO_InitStruct.Pin = FLASH_IO1_Pin|FLASH_IO0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF6_OCTOSPI1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : FLASH_CLK_Pin */
+  GPIO_InitStruct.Pin = FLASH_CLK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF9_OCTOSPI1;
+  HAL_GPIO_Init(FLASH_CLK_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LIM1_1_Pin LIM1_2_Pin */
   GPIO_InitStruct.Pin = LIM1_1_Pin|LIM1_2_Pin;

@@ -1,6 +1,7 @@
 #include "belt/app.hpp"
 
 #include "adc.h"
+#include "belt/can_callback_helper.hpp"
 #include "belt/can_driver.hpp"
 #include "belt/fdcan_driver.hpp"
 #include "belt/vesc_can.hpp"
@@ -163,22 +164,16 @@ void loop()
 // CAN Receive CAllback
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 {
-    if (hfdcan->Instance == hfdcan1.Instance) {
-        fdcan1_bus.update();
-    }
-    if (hfdcan->Instance == hfdcan2.Instance) {
-        vesc.update();
-    }
+    (void)RxFifo0ITs;
+    if (process_fdcan_fifo(hfdcan, &hfdcan1, fdcan1_bus, FDCAN_RX_FIFO0)) return;
+    if (process_fdcan_fifo(hfdcan, &hfdcan2, vesc, FDCAN_RX_FIFO0)) return;
 }
 
 void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo1ITs)
 {
-    if (hfdcan->Instance == hfdcan1.Instance) {
-        fdcan1_bus.update();
-    }
-    if (hfdcan->Instance == hfdcan2.Instance) {
-        vesc.update();
-    }
+    (void)RxFifo1ITs;
+    if (process_fdcan_fifo(hfdcan, &hfdcan1, fdcan1_bus, FDCAN_RX_FIFO1)) return;
+    if (process_fdcan_fifo(hfdcan, &hfdcan2, vesc, FDCAN_RX_FIFO1)) return;
 }
 
 // send_data

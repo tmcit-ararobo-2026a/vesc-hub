@@ -102,16 +102,14 @@ void loop()
         init_command = false;
     }
 
-    // encoder
+    // エンコーダーのパルスカウントを取得
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
-
+    // １回転360度として正規化
     float encoder_angle = encoder_count * (A_ROTATE_ANGLE / ENCODER_COUNT_PER_ROTATE);
-
-    // absolute
+    // belt initで定めたゼロ点からの絶対角度[deg]
     absolute_angle += encoder_angle;
-
-    rotate_count = absolute_angle / A_ROTATE_ANGLE;
+    rotate_count = absolute_angle / A_ROTATE_ANGLE;  // 回転回数[回]
 
     // Hall sensor settings
     HAL_ADC_Start(&hadc1);

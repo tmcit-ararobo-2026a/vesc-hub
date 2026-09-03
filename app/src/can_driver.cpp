@@ -1,16 +1,14 @@
-#include "belt/fdcan_driver.hpp"
-
-#include "gn10_can/core/can_dlc.hpp"
+#include "app/can_driver.hpp"
 
 namespace gn10_can {
 namespace drivers {
 
-void FDCANDriver::set_init_extended_id()
+void CANDriver::set_init_extended_id()
 {
     enable_extended = true;
 }
 
-bool FDCANDriver::init()
+bool CANDriver::init()
 {
     FDCAN_FilterTypeDef filter;
     if (enable_extended) {
@@ -20,7 +18,7 @@ bool FDCANDriver::init()
     }
     filter.FilterIndex  = 0;
     filter.FilterType   = FDCAN_FILTER_MASK;
-    filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
+    filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
     filter.FilterID1    = 0x000;
     filter.FilterID2    = 0x000;
 
@@ -30,13 +28,13 @@ bool FDCANDriver::init()
     if (HAL_FDCAN_Start(hfdcan_) != HAL_OK) {
         return false;
     }
-    if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK) {
+    if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
         return false;
     }
     return true;
 }
 
-bool FDCANDriver::send(const FDCANFrame& frame)
+bool CANDriver::send(const CANFrame& frame)
 {
     FDCAN_TxHeaderTypeDef tx_header;
     if (frame.is_extended) {
@@ -44,13 +42,12 @@ bool FDCANDriver::send(const FDCANFrame& frame)
     } else {
         tx_header.IdType = FDCAN_STANDARD_ID;
     }
-
     tx_header.Identifier          = frame.id;
     tx_header.TxFrameType         = FDCAN_DATA_FRAME;
     tx_header.DataLength          = (uint32_t)frame.dlc;
     tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
     tx_header.BitRateSwitch       = FDCAN_BRS_OFF;
-    tx_header.FDFormat            = FDCAN_FD_CAN;
+    tx_header.FDFormat            = FDCAN_CLASSIC_CAN;
     tx_header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
     tx_header.MessageMarker       = 0;
 
@@ -69,12 +66,12 @@ bool FDCANDriver::send(const FDCANFrame& frame)
     return true;
 }
 
-bool FDCANDriver::receive(FDCANFrame& out_frame)
+bool CANDriver::receive(CANFrame& out_frame)
 {
     FDCAN_RxHeaderTypeDef rx_header;
-    uint8_t rx_data[64];
+    uint8_t rx_data[8];
 
-    if (HAL_FDCAN_GetRxMessage(hfdcan_, FDCAN_RX_FIFO1, &rx_header, rx_data) != HAL_OK) {
+    if (HAL_FDCAN_GetRxMessage(hfdcan_, FDCAN_RX_FIFO0, &rx_header, rx_data) != HAL_OK) {
         return false;
     }
 

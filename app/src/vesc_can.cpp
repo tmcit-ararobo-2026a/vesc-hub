@@ -1,4 +1,4 @@
-#include "belt/vesc_can.hpp"
+#include "app/vesc_can.hpp"
 
 VescCAN::VescCAN(gn10_can::drivers::ICANDriver& can_driver) : can_driver_(can_driver) {}
 

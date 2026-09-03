@@ -1,14 +1,14 @@
 #include "app/app.hpp"
 
 #include "adc.h"
-#include "app/can_callback_helper.hpp"
-#include "app/can_driver.hpp"
-#include "app/fdcan_driver.hpp"
 #include "app/vesc_can.hpp"
 #include "gn10_can/core/can_bus.hpp"
 #include "gn10_can/core/fdcan_bus.hpp"
 #include "gn10_can/devices/esc_hub_server.hpp"
 #include "gn10_can/devices/motor_driver_types.hpp"
+#include "gn10_stm32_fdcan_driver/can_callback_helper.hpp"
+#include "gn10_stm32_fdcan_driver/can_driver.hpp"
+#include "gn10_stm32_fdcan_driver/fdcan_driver.hpp"
 #include "tim.h"
 
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);

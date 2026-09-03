@@ -1,50 +1,57 @@
 #include "app/fdcan_driver.hpp"
 
-#include "gn10_can/core/can_dlc.hpp"
-
 namespace gn10_can {
 namespace drivers {
 
-void FDCANDriver::set_init_extended_id()
+FDCANDriver::FDCANDriver(FDCAN_HandleTypeDef* hfdcan, uint32_t rx_fifo, bool receive_extended_id)
+    : hfdcan_(hfdcan), rx_fifo_(rx_fifo)
 {
-    enable_extended = true;
-}
-
-bool FDCANDriver::init()
-{
-    FDCAN_FilterTypeDef filter;
-    if (enable_extended) {
+    if (rx_fifo == FDCAN_RX_FIFO1) {
+        filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
+    } else {
+        filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+    }
+    if (receive_extended_id) {
         filter.IdType = FDCAN_EXTENDED_ID;
     } else {
         filter.IdType = FDCAN_STANDARD_ID;
     }
-    filter.FilterIndex  = 0;
-    filter.FilterType   = FDCAN_FILTER_MASK;
-    filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
-    filter.FilterID1    = 0x000;
-    filter.FilterID2    = 0x000;
+    filter.FilterIndex = 0;
+    filter.FilterType  = FDCAN_FILTER_MASK;
+    filter.FilterID1   = 0x000;
+    filter.FilterID2   = 0x000;
+}
 
+bool FDCANDriver::init()
+{
     if (HAL_FDCAN_ConfigFilter(hfdcan_, &filter) != HAL_OK) {
         return false;
     }
     if (HAL_FDCAN_Start(hfdcan_) != HAL_OK) {
         return false;
     }
-    if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK) {
-        return false;
+    if (rx_fifo_ == FDCAN_RX_FIFO1) {
+        if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK) {
+            return false;
+        }
+    } else {
+        if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
+            return false;
+        }
     }
+
     return true;
 }
 
 bool FDCANDriver::send(const FDCANFrame& frame)
 {
     FDCAN_TxHeaderTypeDef tx_header;
+    // 拡張IDであるかどうかは引数のframeから判断する
     if (frame.is_extended) {
         tx_header.IdType = FDCAN_EXTENDED_ID;
     } else {
         tx_header.IdType = FDCAN_STANDARD_ID;
     }
-
     tx_header.Identifier          = frame.id;
     tx_header.TxFrameType         = FDCAN_DATA_FRAME;
     tx_header.DataLength          = (uint32_t)frame.dlc;
@@ -54,16 +61,15 @@ bool FDCANDriver::send(const FDCANFrame& frame)
     tx_header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
     tx_header.MessageMarker       = 0;
 
+    // 送信FIFOに空きがなければタイムアウトするまで待機
     uint32_t start_tick = HAL_GetTick();
     while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan_) == 0) {
-        if (HAL_GetTick() - start_tick > TX_FIFO_TIMEOUT) {
-            return false;
+        if (HAL_GetTick() - start_tick > tx_timeout_ms_) {
+            return false;  // タイムアウトは送信失敗として返す
         }
     }
-
-    if (HAL_FDCAN_AddMessageToTxFifoQ(
-            hfdcan_, &tx_header, const_cast<uint8_t*>(frame.data.data())
-        ) != HAL_OK) {
+    // 送信
+    if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan_, &tx_header, frame.data.data()) != HAL_OK) {
         return false;
     }
     return true;
@@ -72,22 +78,14 @@ bool FDCANDriver::send(const FDCANFrame& frame)
 bool FDCANDriver::receive(FDCANFrame& out_frame)
 {
     FDCAN_RxHeaderTypeDef rx_header;
-    uint8_t rx_data[64];
-
-    if (HAL_FDCAN_GetRxMessage(hfdcan_, FDCAN_RX_FIFO1, &rx_header, rx_data) != HAL_OK) {
+    std::array<uint8_t, 64> rx_data{};
+    if (HAL_FDCAN_GetRxMessage(hfdcan_, rx_fifo_, &rx_header, rx_data.data()) != HAL_OK) {
         return false;
     }
-
     out_frame.id          = rx_header.Identifier;
     out_frame.is_extended = (rx_header.IdType == FDCAN_EXTENDED_ID);
     out_frame.dlc         = (uint8_t)rx_header.DataLength;
-
-    uint8_t copy_len = dlc::dlc_to_data_length(out_frame.dlc);
-
-    for (uint8_t i = 0; i < copy_len; ++i) {
-        out_frame.data[i] = rx_data[i];
-    }
-
+    out_frame.data        = rx_data;
     return true;
 }
 

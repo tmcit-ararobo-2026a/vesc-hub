@@ -65,6 +65,7 @@ void VescCAN::comm_can_set_duty(uint8_t controller_id, float duty)
 
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_DUTY << 8);
     frame.set_data_length(sizeof(int32_t));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -76,6 +77,7 @@ void VescCAN::comm_can_set_current(uint8_t controller_id, float current)
 
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT << 8);
     frame.set_data_length(sizeof(int32_t));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -87,6 +89,7 @@ void VescCAN::comm_can_set_current_off_delay(uint8_t controller_id, float curren
     buffer_append_float16(frame.data.data(), off_delay, 1e3, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT << 8);
     frame.set_data_length(6);
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -97,6 +100,7 @@ void VescCAN::comm_can_set_current_brake(uint8_t controller_id, float current)
     buffer_append_int32(frame.data.data(), (int32_t)(current * 1000.0), &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8);
     frame.set_data_length(sizeof(int32_t));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -107,6 +111,7 @@ void VescCAN::comm_can_set_rpm(uint8_t controller_id, float rpm)
     buffer_append_int32(frame.data.data(), (int32_t)rpm, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_RPM << 8);
     frame.set_data_length(sizeof(int32_t));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -117,6 +122,7 @@ void VescCAN::comm_can_set_pos(uint8_t controller_id, float pos)
     buffer_append_int32(frame.data.data(), (int32_t)(pos * 1000000.0), &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_POS << 8);
     frame.set_data_length(sizeof(int32_t));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -127,6 +133,7 @@ void VescCAN::comm_can_set_current_rel(uint8_t controller_id, float current_rel)
     buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_REL << 8);
     frame.set_data_length(sizeof(float));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -145,6 +152,7 @@ void VescCAN::comm_can_set_current_rel_off_delay(
     buffer_append_float16(frame.data.data(), off_delay, 1e3, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_REL << 8);
     frame.set_data_length(6);
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -155,6 +163,7 @@ void VescCAN::comm_can_set_current_brake_rel(uint8_t controller_id, float curren
     buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE_REL << 8);
     frame.set_data_length(sizeof(float));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -165,6 +174,7 @@ void VescCAN::comm_can_set_handbrake(uint8_t controller_id, float current)
     buffer_append_float32(frame.data.data(), current, 1e3, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_HANDBRAKE << 8);
     frame.set_data_length(sizeof(float));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 
@@ -175,6 +185,7 @@ void VescCAN::comm_can_set_handbrake_rel(uint8_t controller_id, float current_re
     buffer_append_float32(frame.data.data(), current_rel, 1e5, &send_index);
     frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_CURRENT_HANDBRAKE_REL << 8);
     frame.set_data_length(sizeof(float));
+    frame.is_extended = true;
     can_driver_.send(frame);
 }
 // 0x1FFFFFFF

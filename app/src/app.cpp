@@ -20,7 +20,7 @@ gn10_can::devices::MotorConfig motor_config_belt;
 uint8_t motor_id = 0;
 
 // vesc
-gn10_can::drivers::CANDriver can2_driver(&hfdcan2);
+gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
 VescCAN vesc(can2_driver);
 
 float absolute_angle;
@@ -69,7 +69,6 @@ void setup()
     HAL_TIM_Base_Start_IT(&htim7);
     // init
     fdcan1_driver.init();
-    can2_driver.set_init_extended_id();
     can2_driver.init();
 
     // set tick

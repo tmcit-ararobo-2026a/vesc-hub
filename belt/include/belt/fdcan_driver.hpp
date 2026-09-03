@@ -21,6 +21,10 @@ class FDCANDriver : public IFDCANDriver
 public:
     FDCANDriver(FDCAN_HandleTypeDef* hfdcan) : hfdcan_(hfdcan) {}
 
+    /**
+     * @brief init前に呼び出すことでidの拡張フォーマットを有効化できる
+     *
+     */
     void set_init_extended_id();
     bool init();
     bool send(const FDCANFrame& frame) override;

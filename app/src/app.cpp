@@ -67,7 +67,6 @@ void setup()
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    HAL_TIM_Base_Start_IT(&htim7);
     // init
     fdcan1_driver.init();
     can2_driver.init();
@@ -86,6 +85,9 @@ void setup()
     HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
 
     absolute_angle = 0;
+
+    // タイマーは最後に有効化
+    HAL_TIM_Base_Start_IT(&htim7);
 }
 
 void loop()

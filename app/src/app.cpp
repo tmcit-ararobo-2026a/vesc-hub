@@ -101,11 +101,7 @@ void loop()
         init_command = false;
     }
 
-    if (vesc_vel[0] > 1.0f) {
-        vesc_vel[0] = 1.0f;
-    } else if (vesc_vel[0] < 0.0f) {
-        vesc_vel[0] = 0;
-    }
+    vesc_vel[0] = std::clamp(vesc_vel[0], 0.0f, 1.0f);
 
     // encoder
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));

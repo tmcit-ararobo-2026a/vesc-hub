@@ -55,10 +55,6 @@ float voltage_threshold_low  = 1.8f;
 constexpr uint32_t HEARTBEAT_TOGGLE_INTERCAL_MS = 500;
 uint32_t heartbeat_last_toggle_time_ms          = 0;
 
-// Can send data config
-constexpr uint32_t SEND_ANGLAR_DATA_INTERCAL_MS = 100;
-uint32_t send_anglar_data_last_time_ms          = 0;
-
 // setting function
 void update_heartbeat_led();
 void send_anglar_data(float angular_data[4]);
@@ -79,7 +75,8 @@ void timer_1khz_process()
 
     // send
     if (rotate_count > 11.4f && movement) {
-        send_anglar_data(speed_data);
+        esc_hub.set_feedbacks(speed_data);
+        HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
     }
 }
 
@@ -98,7 +95,6 @@ void setup()
     can2_driver.init();
 
     // set tick
-    send_anglar_data_last_time_ms = HAL_GetTick();
     heartbeat_last_toggle_time_ms = HAL_GetTick();
 
     // ADC
@@ -219,7 +215,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 }
 
 /**
- * @brief Toggle heartbeat LED at a fixed interval.
+ * @brief Toggle heartbeat LED at    float angle_now;
+    float delta_angle;
+    float initial_speed; a fixed interval.
  */
 void update_heartbeat_led()
 {
@@ -227,18 +225,5 @@ void update_heartbeat_led()
     if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERCAL_MS) {
         heartbeat_last_toggle_time_ms = now_ms;
         HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
-    }
-}
-
-/**
- * @brief Toggle send at a fixed interval.
- */
-void send_anglar_data(float angular_data[4])
-{
-    const uint32_t now_ms = HAL_GetTick();
-    if ((now_ms - send_anglar_data_last_time_ms) >= SEND_ANGLAR_DATA_INTERCAL_MS) {
-        send_anglar_data_last_time_ms = now_ms;
-        esc_hub.set_feedbacks(angular_data);
-        HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
     }
 }

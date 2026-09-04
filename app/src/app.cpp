@@ -110,6 +110,7 @@ void setup()
 
     // タイマーは最後に有効化
     HAL_TIM_Base_Start_IT(&htim7);
+    HAL_TIM_Base_Start_IT(&htim6);
 }
 
 void loop()

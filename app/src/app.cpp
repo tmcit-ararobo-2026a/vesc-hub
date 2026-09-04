@@ -83,7 +83,10 @@ void timer_1khz_process()
     }
 }
 
-void timer_100hz_process() {}
+void timer_100hz_process()
+{
+    vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+}
 void setup()
 {
     // encoder settings

@@ -12,22 +12,25 @@
 #include "tim.h"
 
 #define VESC_ID 43  // 43 or 45
+
+// タイマー使用
 volatile bool timer_1khz_triggered;
 volatile bool timer_100hz_triggered;
+// 状態管理用
+bool init         = false;
+bool init_command = false;
 
+// メイン基板との通信に使用
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
-
-// These use get init
 gn10_can::devices::MotorConfig motor_config_belt;
-uint8_t motor_id = 0;
+uint8_t motor_id                   = 0;
+float target_vel_from_mainboard[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
-// vesc
+// VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
 VescCAN vesc(can2_driver);
-
-float absolute_angle;
 
 // constants
 constexpr float RPM_CONVERSION_CONSTANT  = -46000.0f;
@@ -36,28 +39,25 @@ constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
 constexpr float A_ROTATE_ANGLE           = 360.0f;
 constexpr float DISTANCE_PER_ROTATION    = 0.12f;
 
-// definitions
-float vesc_vel[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
+// VESC関係
+float target_rpm = 0.0f;
+// エンコーダー関係
 float rotate_count = 0.0f;
-float target_rpm   = 0.0f;
 float angle_last   = 0.0f;
-
-bool movement     = false;
-bool magnet_near  = false;
-bool init         = false;
-bool init_command = false;
-
-// Voltage threshold for hall sensor
+float absolute_angle;
+// ホールセンサ
+bool movement                = false;
+bool magnet_near             = false;
 float voltage_threshold_high = 2.0f;
 float voltage_threshold_low  = 1.8f;
 
-// LED config
-constexpr uint32_t k_heartbeat_toggle_interval_ms = 500;
-uint32_t heartbeat_last_toggle_time_ms            = 0;
+// LED点滅
+constexpr uint32_t HEARTBEAT_TOGGLE_INTERCAL_MS = 500;
+uint32_t heartbeat_last_toggle_time_ms          = 0;
 
 // Can send data config
-constexpr uint32_t k_send_anglar_data_interval_ms = 100;
-uint32_t send_anglar_data_last_time_ms            = 0;
+constexpr uint32_t SEND_ANGLAR_DATA_INTERCAL_MS = 100;
+uint32_t send_anglar_data_last_time_ms          = 0;
 
 // setting function
 void update_heartbeat_led();
@@ -119,8 +119,8 @@ void setup()
 void loop()
 {
     // 司令を受信
-    esc_hub.get_targets(vesc_vel);
-    vesc_vel[0] = std::clamp(vesc_vel[0], 0.0f, 1.0f);
+    esc_hub.get_targets(target_vel_from_mainboard);
+    target_vel_from_mainboard[0] = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f);
 
     if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
         movement     = false;
@@ -151,7 +151,7 @@ void loop()
     }
 
     // Control motor moving rpm
-    target_rpm = vesc_vel[0] * RPM_CONVERSION_CONSTANT;
+    target_rpm = target_vel_from_mainboard[0] * RPM_CONVERSION_CONSTANT;
 
     if (rotate_count > 11.5) {
         movement = false;
@@ -224,7 +224,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 void update_heartbeat_led()
 {
     const uint32_t now_ms = HAL_GetTick();
-    if ((now_ms - heartbeat_last_toggle_time_ms) >= k_heartbeat_toggle_interval_ms) {
+    if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERCAL_MS) {
         heartbeat_last_toggle_time_ms = now_ms;
         HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
     }
@@ -236,7 +236,7 @@ void update_heartbeat_led()
 void send_anglar_data(float angular_data[4])
 {
     const uint32_t now_ms = HAL_GetTick();
-    if ((now_ms - send_anglar_data_last_time_ms) >= k_send_anglar_data_interval_ms) {
+    if ((now_ms - send_anglar_data_last_time_ms) >= SEND_ANGLAR_DATA_INTERCAL_MS) {
         send_anglar_data_last_time_ms = now_ms;
         esc_hub.set_feedbacks(angular_data);
         HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);

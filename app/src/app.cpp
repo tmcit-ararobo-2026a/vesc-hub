@@ -145,10 +145,6 @@ void loop()
         }
     }
 
-    // REREASE POINTを超えたら、動かないようにする。
-    if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
-    }
-
     // send target
     if (timer_100hz_triggered) {
         timer_100hz_triggered = false;

@@ -110,9 +110,9 @@ void loop()
     float voltage   = (float)adc_val / 4095.0f * 3.3f;
 
     // ホールセンサー反応処理
-    if (voltage > voltage_threshold_high && !magnet_near) {
+    if (voltage > voltage_threshold_high) {
         magnet_near = true;
-    } else if (magnet_near && voltage < voltage_threshold_low) {
+    } else if (voltage < voltage_threshold_low) {
         magnet_near = false;
     }
 

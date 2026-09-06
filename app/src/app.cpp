@@ -18,10 +18,11 @@ volatile bool timer_100hz_triggered;
 
 // 状態管理用
 enum class InitState {
-    GetInit,
-    Initializing,
-    FinishInit,
-} init;
+    WaitForInit,
+    ZeroPointInitializing,
+    InitializingPosition,
+    Ready,
+} app_state;
 
 // メイン基板との通信に使用
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
@@ -77,7 +78,7 @@ void timer_1khz_process()
 
 void timer_100hz_process()
 {
-    if (init != InitState::FinishInit) {
+    if (app_state != InitState::WaitForInit) {
         vesc.comm_can_set_rpm(VESC_ID, target_rpm);
         esc_hub.set_feedbacks(feedback_data.data());
     }
@@ -85,31 +86,20 @@ void timer_100hz_process()
 
 void setup()
 {
-    // encoder settings
-    encoder.hardware_init();
-
-    // init
+    // 初期化待ちに設定
+    app_state = InitState::WaitForInit;
+    // CAN通信の開始
     fdcan1_driver.init();
     can2_driver.init();
-
-    // set tick
-    heartbeat_last_toggle_time_ms = HAL_GetTick();
-
-    // ADC
+    // Encoderの初期化
+    encoder.hardware_init();
+    // ADCのキャリブレーション
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-
-    // Wait until a command "belt_init" arrives
-    while (!esc_hub.get_init(motor_id, motor_config_belt)) {
-        HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
-    }
-    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
-
-    // init
-    init = InitState::FinishInit;
-
-    // タイマーは最後に有効化
+    // タイマーを有効化
     HAL_TIM_Base_Start_IT(&htim7);
     HAL_TIM_Base_Start_IT(&htim6);
+    // Tickを初期化
+    heartbeat_last_toggle_time_ms = HAL_GetTick();
 }
 
 void loop()
@@ -131,28 +121,28 @@ void loop()
     esc_hub.get_targets(target_vel_from_mainboard.data());
     target_vel_from_mainboard[0] = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f);
 
-    if (esc_hub.get_init(motor_id, motor_config_belt) && init == InitState::FinishInit) {
-        movement = false;
-        init     = InitState::GetInit;
+    if (esc_hub.get_init(motor_id, motor_config_belt)) {
+        movement  = false;
+        app_state = InitState::ZeroPointInitializing;
     }
 
     // Control motor moving rpm
     target_rpm = target_vel_from_mainboard[0] * RPM_CONVERSION_CONSTANT;
 
     // ホールセンサーまでのinit処理
-    if (init == InitState::GetInit) {
+    if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
             encoder.read_and_reset_count();
-            init = InitState::Initializing;
+            app_state = InitState::InitializingPosition;
         } else {
             target_rpm = TARGET_RPM_INIT;
         }
     }
 
     // ホールセンサーから初期位置までのinit処理
-    if (init == InitState::Initializing) {
+    if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            init       = InitState::FinishInit;
+            app_state  = InitState::Ready;
             target_rpm = 0.0f;
             movement   = true;
         } else {

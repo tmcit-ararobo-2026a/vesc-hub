@@ -128,7 +128,7 @@ void loop()
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
-            encoder.read_and_reset_count();
+            encoder.reset();
             app_state = InitState::InitializingPosition;
         } else {
             target_rpm = TARGET_RPM_INIT;

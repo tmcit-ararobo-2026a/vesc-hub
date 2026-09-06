@@ -17,8 +17,9 @@
 volatile bool timer_1khz_triggered;
 volatile bool timer_100hz_triggered;
 // 状態管理用
-bool init         = false;
-bool init_command = false;
+bool init               = false;
+bool init_command       = false;
+bool wait_for_belt_stop = false;
 
 // メイン基板との通信に使用
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
@@ -75,8 +76,17 @@ void timer_1khz_process()
 
     // send
     if (rotate_count > 11.4f && movement) {
-        esc_hub.set_feedbacks(speed_data);
-        HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
+        if (wait_for_belt_stop) {
+            return;
+        } else {
+            esc_hub.set_feedbacks(speed_data);
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
+            wait_for_belt_stop = true;
+        }
+
+    } else {
+        wait_for_belt_stop = false;
+        HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
     }
 }
 

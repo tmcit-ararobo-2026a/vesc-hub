@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(app STATIC
     src/app.cpp
     src/vesc_can.cpp
+    src/incremental_encoder.cpp
 )
 
 target_include_directories(app PUBLIC

@@ -143,6 +143,7 @@ void loop()
     // ホールセンサーまでのinit処理
     if (init == InitState::GetInit) {
         if (magnet_near) {
+            encoder.read_and_reset_count();
             init = InitState::Initializing;
         } else {
             target_rpm = TARGET_RPM_INIT;
@@ -155,7 +156,6 @@ void loop()
             init       = InitState::FinishInit;
             target_rpm = 0.0f;
             movement   = true;
-            encoder.read_and_reset_count();
         } else {
             target_rpm = TARGET_RPM_INIT;
         }

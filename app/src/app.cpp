@@ -30,6 +30,7 @@ gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
 gn10_can::devices::MotorConfig motor_config_belt;
 uint8_t motor_id                               = 0;
 std::array<float, 4> target_vel_from_mainboard = {};
+std::array<float, 4> feedback_data             = {};
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -40,11 +41,13 @@ constexpr float RPM_CONVERSION_CONSTANT = -46000.0f;
 constexpr float TARGET_RPM_INIT         = -2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
+constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 
 // VESC関係
 float target_rpm = 0.0f;
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
+float total_encoder_rad = 0.0f;
 
 // ホールセンサ
 bool movement                = false;
@@ -65,17 +68,19 @@ float rotate_to_rad(float rotate)
     return rotate * M_PI * 2;
 }
 
-void timer_1khz_process(float rad_per_sec)
+void timer_1khz_process()
 {
-    HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
-    std::array<float, 4> feedback_data = {};
-    feedback_data[0]                   = rad_per_sec;
-    esc_hub.set_feedbacks(feedback_data.data());
+    int16_t encoder_count = encoder.read_and_reset_count();
+    feedback_data[0]      = encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
+    total_encoder_rad     = encoder.accumulate_angle_rad(encoder_count);
 }
 
 void timer_100hz_process()
 {
-    vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+    if (init != InitState::FinishInit) {
+        vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+        esc_hub.set_feedbacks(feedback_data.data());
+    }
 }
 
 void setup()
@@ -109,12 +114,6 @@ void setup()
 
 void loop()
 {
-    // エンコーダーのパルスカウントを取得
-    int16_t encoder_count = encoder.read_and_reset_count();
-
-    // 累積されたエンコーダーの値
-    float total_encoder_rad = encoder.accumulate_angle_rad(encoder_count);
-
     // ホールセンサーの設定
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, 100);
@@ -169,17 +168,13 @@ void loop()
     // send target
     if (timer_100hz_triggered) {
         timer_100hz_triggered = false;
-        if (movement) {
-            timer_100hz_process();
-        }
+        timer_100hz_process();
     }
 
     // send feedback
     if (timer_1khz_triggered) {
         timer_1khz_triggered = false;
-        if (init == InitState::Initializing || movement) {
-            timer_1khz_process(encoder.count_to_angular_velocity(encoder_count, 0.001f));
-        }
+        timer_1khz_process();
     }
 
     update_heartbeat_led();

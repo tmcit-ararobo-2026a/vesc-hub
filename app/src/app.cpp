@@ -51,7 +51,6 @@ gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
 float total_encoder_rad = 0.0f;
 
 // ホールセンサ
-bool movement                = false;
 bool magnet_near             = false;
 float voltage_threshold_high = 2.0f;
 float voltage_threshold_low  = 1.8f;
@@ -122,7 +121,6 @@ void loop()
     target_vel_from_mainboard[0] = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f);
 
     if (esc_hub.get_init(motor_id, motor_config_belt)) {
-        movement  = false;
         app_state = InitState::ZeroPointInitializing;
     }
 
@@ -144,7 +142,6 @@ void loop()
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             app_state  = InitState::Ready;
             target_rpm = 0.0f;
-            movement   = true;
         } else {
             target_rpm = TARGET_RPM_INIT;
         }
@@ -152,7 +149,6 @@ void loop()
 
     // REREASE POINTを超えたら、動かないようにする。
     if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
-        movement = false;
     }
 
     // send target

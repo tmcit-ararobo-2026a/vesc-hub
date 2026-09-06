@@ -118,14 +118,12 @@ void loop()
 
     // 司令を受信
     esc_hub.get_targets(target_vel_from_mainboard.data());
-    target_vel_from_mainboard[0] = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f);
-
     if (esc_hub.get_init(motor_id, motor_config_belt)) {
         app_state = InitState::ZeroPointInitializing;
     }
 
     // Control motor moving rpm
-    target_rpm = target_vel_from_mainboard[0] * RPM_CONVERSION_CONSTANT;
+    target_rpm = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f) * RPM_CONVERSION_CONSTANT;
 
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {

@@ -18,10 +18,11 @@ volatile bool timer_100hz_triggered;
 
 // 状態管理用
 enum class InitState {
-    GetInit,
-    Initializing,
-    FinishInit,
-} init;
+    WaitForInit,
+    ZeroPointInitializing,
+    InitializingPosition,
+    Ready,
+} app_state;
 
 // メイン基板との通信に使用
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
@@ -30,6 +31,7 @@ gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
 gn10_can::devices::MotorConfig motor_config_belt;
 uint8_t motor_id                               = 0;
 std::array<float, 4> target_vel_from_mainboard = {};
+std::array<float, 4> feedback_data             = {};
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -40,14 +42,15 @@ constexpr float RPM_CONVERSION_CONSTANT = -46000.0f;
 constexpr float TARGET_RPM_INIT         = -2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
+constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 
 // VESC関係
 float target_rpm = 0.0f;
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
+float total_encoder_rad = 0.0f;
 
 // ホールセンサ
-bool movement                = false;
 bool magnet_near             = false;
 float voltage_threshold_high = 2.0f;
 float voltage_threshold_low  = 1.8f;
@@ -65,56 +68,41 @@ float rotate_to_rad(float rotate)
     return rotate * M_PI * 2;
 }
 
-void timer_1khz_process(float rad_per_sec)
+void timer_1khz_process()
 {
-    HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
-    std::array<float, 4> feedback_data = {};
-    feedback_data[0]                   = rad_per_sec;
-    esc_hub.set_feedbacks(feedback_data.data());
+    int16_t encoder_count = encoder.read_and_reset_count();
+    feedback_data[0]      = encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
+    total_encoder_rad     = encoder.accumulate_angle_rad(encoder_count);
 }
 
 void timer_100hz_process()
 {
-    vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+    if (app_state != InitState::WaitForInit) {
+        vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+        esc_hub.set_feedbacks(feedback_data.data());
+    }
 }
 
 void setup()
 {
-    // encoder settings
-    encoder.hardware_init();
-
-    // init
+    // 初期化待ちに設定
+    app_state = InitState::WaitForInit;
+    // CAN通信の開始
     fdcan1_driver.init();
     can2_driver.init();
-
-    // set tick
-    heartbeat_last_toggle_time_ms = HAL_GetTick();
-
-    // ADC
+    // Encoderの初期化
+    encoder.hardware_init();
+    // ADCのキャリブレーション
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-
-    // Wait until a command "belt_init" arrives
-    while (!esc_hub.get_init(motor_id, motor_config_belt)) {
-        HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
-    }
-    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
-
-    // init
-    init = InitState::FinishInit;
-
-    // タイマーは最後に有効化
+    // タイマーを有効化
     HAL_TIM_Base_Start_IT(&htim7);
     HAL_TIM_Base_Start_IT(&htim6);
+    // Tickを初期化
+    heartbeat_last_toggle_time_ms = HAL_GetTick();
 }
 
 void loop()
 {
-    // エンコーダーのパルスカウントを取得
-    int16_t encoder_count = encoder.read_and_reset_count();
-
-    // 累積されたエンコーダーの値
-    float total_encoder_rad = encoder.accumulate_angle_rad(encoder_count);
-
     // ホールセンサーの設定
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, 100);
@@ -122,64 +110,51 @@ void loop()
     float voltage   = (float)adc_val / 4095.0f * 3.3f;
 
     // ホールセンサー反応処理
-    if (voltage > voltage_threshold_high && !magnet_near) {
+    if (voltage > voltage_threshold_high) {
         magnet_near = true;
-    } else if (magnet_near && voltage < voltage_threshold_low) {
+    } else if (voltage < voltage_threshold_low) {
         magnet_near = false;
     }
 
     // 司令を受信
     esc_hub.get_targets(target_vel_from_mainboard.data());
-    target_vel_from_mainboard[0] = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f);
-
-    if (esc_hub.get_init(motor_id, motor_config_belt) && init == InitState::FinishInit) {
-        movement = false;
-        init     = InitState::GetInit;
+    if (esc_hub.get_init(motor_id, motor_config_belt)) {
+        app_state = InitState::ZeroPointInitializing;
     }
 
     // Control motor moving rpm
-    target_rpm = target_vel_from_mainboard[0] * RPM_CONVERSION_CONSTANT;
+    target_rpm = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f) * RPM_CONVERSION_CONSTANT;
 
     // ホールセンサーまでのinit処理
-    if (init == InitState::GetInit) {
+    if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
-            encoder.read_and_reset_count();
-            init = InitState::Initializing;
+            encoder.reset();
+            app_state = InitState::InitializingPosition;
         } else {
             target_rpm = TARGET_RPM_INIT;
         }
     }
 
     // ホールセンサーから初期位置までのinit処理
-    if (init == InitState::Initializing) {
+    if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            init       = InitState::FinishInit;
+            app_state  = InitState::Ready;
             target_rpm = 0.0f;
-            movement   = true;
         } else {
             target_rpm = TARGET_RPM_INIT;
         }
     }
 
-    // REREASE POINTを超えたら、動かないようにする。
-    if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
-        movement = false;
-    }
-
     // send target
     if (timer_100hz_triggered) {
         timer_100hz_triggered = false;
-        if (movement) {
-            timer_100hz_process();
-        }
+        timer_100hz_process();
     }
 
     // send feedback
     if (timer_1khz_triggered) {
         timer_1khz_triggered = false;
-        if (init == InitState::Initializing || movement) {
-            timer_1khz_process(encoder.count_to_angular_velocity(encoder_count, 0.001f));
-        }
+        timer_1khz_process();
     }
 
     update_heartbeat_led();

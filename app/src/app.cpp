@@ -147,15 +147,15 @@ void loop()
     // 司令を受信
     launcher.get_fire_command(target_vel_from_mainboard);
 
-    if (launcher.get_init()) {
-        app_state = InitState::ZeroPointInitializing;
-    }
-
     // 射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (enable_injection) {
         target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
     } else {
         target_erpm = 0.0f;
+    }
+
+    if (launcher.get_init()) {
+        app_state = InitState::ZeroPointInitializing;
     }
 
     // ホールセンサーまでのinit処理
@@ -172,8 +172,8 @@ void loop()
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             app_state        = InitState::Ready;
-            enable_injection = true;  // 射出許可
             target_erpm      = 0.0f;
+            enable_injection = true;  // 射出許可
         } else {
             target_erpm = TARGET_ERPM_INIT;
         }

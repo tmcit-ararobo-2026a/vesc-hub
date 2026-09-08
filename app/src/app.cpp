@@ -33,7 +33,8 @@ gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
 float target_vel_from_mainboard;
-float feedback_data{};
+float feedback_angular_velocity{};
+float feedback_velocity{};
 bool feedback_100hz = false;
 
 // VESCとのCAN通信
@@ -41,14 +42,16 @@ gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
 VescCAN vesc(can2_driver);
 
 // constants
-constexpr float RPM_CONVERSION_CONSTANT = -46000.0f;
-constexpr float TARGET_RPM_INIT         = -2500.0f;
+constexpr float TARGET_ERPM_INIT        = 2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
+constexpr float PULLEY_RADIUS           = 0.12f;
+constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
+constexpr float ROTATION_DIRECTION      = -1.0f;
 
 // VESC関係
-float target_rpm = 0.0f;
+float target_erpm = 0.0f;
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
 float total_encoder_rad = 0.0f;
@@ -71,15 +74,27 @@ float rotate_to_rad(float rotate)
     return rotate * M_PI * 2;
 }
 
+float velocity_to_rpm(float velocity)
+{
+    return (velocity / (2 * M_PI * PULLEY_RADIUS)) * 60;
+}
+
+float angular_velocity_to_velocity(float angular_velocity)
+{
+    return angular_velocity * PULLEY_RADIUS;
+}
+
 void timer_1khz_process()
 {
     int16_t encoder_count = encoder.read_and_reset_count();
-    feedback_data         = encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
-    total_encoder_rad     = encoder.accumulate_angle_rad(encoder_count);
+    feedback_angular_velocity =
+        encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
+    total_encoder_rad = encoder.accumulate_angle_rad(encoder_count);
 
     if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) &&
         app_state == InitState::Ready) {
-        launcher.send_release_point(feedback_data);
+        feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
+        launcher.send_release_point(feedback_velocity);
         app_state = InitState::ZeroPointInitializing;
     }
 }
@@ -87,10 +102,10 @@ void timer_1khz_process()
 void timer_100hz_process()
 {
     if (app_state != InitState::Ready) {
-        vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+        vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
     if (feedback_100hz) {
-        launcher.send_velocity_feedback(feedback_data);
+        launcher.send_velocity_feedback(feedback_velocity);
     }
 }
 
@@ -137,7 +152,7 @@ void loop()
     }
 
     // Control motor moving rpm
-    target_rpm = std::clamp(target_vel_from_mainboard, 0.0f, 1.0f) * RPM_CONVERSION_CONSTANT;
+    target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
 
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {
@@ -145,17 +160,17 @@ void loop()
             encoder.reset();
             app_state = InitState::InitializingPosition;
         } else {
-            target_rpm = TARGET_RPM_INIT;
+            target_erpm = TARGET_ERPM_INIT;
         }
     }
 
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            app_state  = InitState::Ready;
-            target_rpm = 0.0f;
+            app_state   = InitState::Ready;
+            target_erpm = 0.0f;
         } else {
-            target_rpm = TARGET_RPM_INIT;
+            target_erpm = TARGET_ERPM_INIT;
         }
     }
 

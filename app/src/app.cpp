@@ -1,13 +1,16 @@
 #include "app/app.hpp"
 
-#include "adc.h"
+/* app */
 #include "app/incremental_encoder.hpp"
 #include "app/vesc_can.hpp"
-#include "gn10_can/devices/esc_hub_server.hpp"
-#include "gn10_can/devices/motor_driver_types.hpp"
+/* gn10-can*/
+#include "gn10_can/devices/launcher_server.hpp"
+/* fdcan driver*/
 #include "gn10_stm32_fdcan_driver/can_callback_helper.hpp"
 #include "gn10_stm32_fdcan_driver/can_driver.hpp"
 #include "gn10_stm32_fdcan_driver/fdcan_driver.hpp"
+/* stm */
+#include "adc.h"
 #include "tim.h"
 
 #define VESC_ID 43  // 43 or 45
@@ -27,11 +30,11 @@ enum class InitState {
 // メイン基板との通信に使用
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
-gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
-gn10_can::devices::MotorConfig motor_config_belt;
-uint8_t motor_id                               = 0;
-std::array<float, 4> target_vel_from_mainboard = {};
-std::array<float, 4> feedback_data             = {};
+gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
+
+uint8_t motor_id = 0;
+float target_vel_from_mainboard;
+float feedback_data{};
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -71,7 +74,7 @@ float rotate_to_rad(float rotate)
 void timer_1khz_process()
 {
     int16_t encoder_count = encoder.read_and_reset_count();
-    feedback_data[0]      = encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
+    feedback_data         = encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     total_encoder_rad     = encoder.accumulate_angle_rad(encoder_count);
 }
 
@@ -79,7 +82,7 @@ void timer_100hz_process()
 {
     if (app_state != InitState::WaitForInit) {
         vesc.comm_can_set_rpm(VESC_ID, target_rpm);
-        esc_hub.set_feedbacks(feedback_data.data());
+        launcher.send_velocity_feedback(feedback_data);
     }
 }
 
@@ -117,13 +120,14 @@ void loop()
     }
 
     // 司令を受信
-    esc_hub.get_targets(target_vel_from_mainboard.data());
-    if (esc_hub.get_init(motor_id, motor_config_belt)) {
+    launcher.get_fire_command(target_vel_from_mainboard);
+
+    if (launcher.get_init()) {
         app_state = InitState::ZeroPointInitializing;
     }
 
     // Control motor moving rpm
-    target_rpm = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f) * RPM_CONVERSION_CONSTANT;
+    target_rpm = std::clamp(target_vel_from_mainboard, 0.0f, 1.0f) * RPM_CONVERSION_CONSTANT;
 
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {

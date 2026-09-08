@@ -45,7 +45,7 @@ VescCAN vesc(can2_driver);
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
-constexpr float PULLEY_RADIUS           = 0.019f;
+constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;

@@ -69,16 +69,25 @@ uint32_t heartbeat_last_toggle_time_ms          = 0;
 void update_heartbeat_led();
 void send_anglar_data(std::array<float, 4> send_data);
 
+/**
+ * @brief 回転数からradに変換
+ */
 float rotate_to_rad(float rotate)
 {
     return rotate * M_PI * 2;
 }
 
+/**
+ * @brief 速度からrpmに変換
+ */
 float velocity_to_rpm(float velocity)
 {
     return (velocity / (2 * M_PI * PULLEY_RADIUS)) * 60;
 }
 
+/**
+ * @brief 角速度から速度に変換
+ */
 float angular_velocity_to_velocity(float angular_velocity)
 {
     return angular_velocity * PULLEY_RADIUS;
@@ -90,20 +99,15 @@ void timer_1khz_process()
     feedback_angular_velocity =
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     total_encoder_rad = encoder.accumulate_angle_rad(encoder_count);
-
-    if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) &&
-        app_state == InitState::Ready) {
-        feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
-        launcher.send_release_point(feedback_velocity);
-        app_state = InitState::ZeroPointInitializing;
-    }
 }
 
 void timer_100hz_process()
 {
+    // 初期化が終わっているたらモーター駆動を許可
     if (app_state != InitState::Ready) {
         vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
+    // 射出司令を受け取ってから初期化処理が終わるまで速度を送信する
     if (feedback_100hz) {
         launcher.send_velocity_feedback(feedback_velocity);
     }
@@ -167,11 +171,20 @@ void loop()
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            app_state   = InitState::Ready;
-            target_erpm = 0.0f;
+            app_state      = InitState::Ready;
+            feedback_100hz = false;
+            target_erpm    = 0.0f;
         } else {
             target_erpm = TARGET_ERPM_INIT;
         }
+    }
+
+    // しきい値を超えたらモーターを止めて、終速を送る処理
+    if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) &&
+        app_state == InitState::Ready) {
+        feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
+        launcher.send_release_point(feedback_velocity);
+        app_state = InitState::ZeroPointInitializing;
     }
 
     // send target

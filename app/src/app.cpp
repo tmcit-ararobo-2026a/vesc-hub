@@ -34,7 +34,7 @@ gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
 float target_vel_from_mainboard;
 float feedback_data{};
-bool feedback_100khz = false;
+bool feedback_100hz = false;
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -89,7 +89,7 @@ void timer_100hz_process()
     if (app_state != InitState::Ready) {
         vesc.comm_can_set_rpm(VESC_ID, target_rpm);
     }
-    if (feedback_100khz) {
+    if (feedback_100hz) {
         launcher.send_velocity_feedback(feedback_data);
     }
 }
@@ -129,7 +129,7 @@ void loop()
 
     // 司令を受信
     if (launcher.get_fire_command(target_vel_from_mainboard)) {
-        feedback_100khz = true;
+        feedback_100hz = true;
     }
 
     if (launcher.get_init()) {

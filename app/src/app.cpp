@@ -103,12 +103,12 @@ void timer_1khz_process()
 
 void timer_100hz_process()
 {
-    // 初期化が終わっているたらモーター駆動を許可
+    // 初期化が終わっているならモーター駆動を許可
     if (app_state != InitState::Ready) {
         vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
-    // 射出司令を受け取ってから初期化処理が終わるまで速度を送信する
-    if (feedback_100hz) {
+    // init処理が終わったら送信
+    if (app_state != InitState::WaitForInit) {
         launcher.send_velocity_feedback(feedback_velocity);
     }
 }

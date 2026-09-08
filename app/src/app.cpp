@@ -32,10 +32,10 @@ gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
-float target_vel_from_mainboard;
+float target_vel_from_mainboard{};
 float feedback_angular_velocity{};
 float feedback_velocity{};
-bool feedback_100hz = false;
+bool enable_injection = false;
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -103,13 +103,10 @@ void timer_1khz_process()
 
 void timer_100hz_process()
 {
-    // 初期化が終わっているならモーター駆動を許可
-    if (app_state != InitState::Ready) {
-        vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
-    }
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
         launcher.send_velocity_feedback(feedback_velocity);
+        vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
 
@@ -142,21 +139,24 @@ void loop()
     // ホールセンサー反応処理
     if (voltage > voltage_threshold_high) {
         magnet_near = true;
-    } else if (voltage < voltage_threshold_low) {
+    }
+    if (voltage < voltage_threshold_low) {
         magnet_near = false;
     }
 
     // 司令を受信
-    if (launcher.get_fire_command(target_vel_from_mainboard)) {
-        feedback_100hz = true;
-    }
+    launcher.get_fire_command(target_vel_from_mainboard);
 
     if (launcher.get_init()) {
         app_state = InitState::ZeroPointInitializing;
     }
 
-    // Control motor moving rpm
-    target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
+    // 射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
+    if (enable_injection) {
+        target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
+    } else {
+        target_erpm = 0.0f;
+    }
 
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {
@@ -171,20 +171,22 @@ void loop()
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            app_state      = InitState::Ready;
-            feedback_100hz = false;
-            target_erpm    = 0.0f;
+            app_state        = InitState::Ready;
+            enable_injection = true;  // 射出許可
+            target_erpm      = 0.0f;
         } else {
             target_erpm = TARGET_ERPM_INIT;
         }
     }
 
-    // しきい値を超えたらモーターを止めて、終速を送る処理
-    if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) &&
-        app_state == InitState::Ready) {
-        feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
-        launcher.send_release_point(feedback_velocity);
-        app_state = InitState::ZeroPointInitializing;
+    if (app_state == InitState::Ready) {
+        // しきい値を超えたらモーターを止めて、終速を送る処理
+        if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
+            feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
+            launcher.send_release_point(feedback_velocity);
+            app_state        = InitState::ZeroPointInitializing;
+            enable_injection = false;  // 射出停止
+        }
     }
 
     // send target

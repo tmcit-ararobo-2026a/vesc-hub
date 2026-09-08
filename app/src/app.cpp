@@ -32,9 +32,9 @@ gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
-uint8_t motor_id = 0;
 float target_vel_from_mainboard;
 float feedback_data{};
+bool feedback_100khz = false;
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -76,12 +76,20 @@ void timer_1khz_process()
     int16_t encoder_count = encoder.read_and_reset_count();
     feedback_data         = encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     total_encoder_rad     = encoder.accumulate_angle_rad(encoder_count);
+
+    if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) &&
+        app_state == InitState::Ready) {
+        launcher.send_release_point(feedback_data);
+        app_state = InitState::ZeroPointInitializing;
+    }
 }
 
 void timer_100hz_process()
 {
-    if (app_state != InitState::WaitForInit) {
+    if (app_state != InitState::Ready) {
         vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+    }
+    if (feedback_100khz) {
         launcher.send_velocity_feedback(feedback_data);
     }
 }
@@ -120,7 +128,9 @@ void loop()
     }
 
     // 司令を受信
-    launcher.get_fire_command(target_vel_from_mainboard);
+    if (launcher.get_fire_command(target_vel_from_mainboard)) {
+        feedback_100khz = true;
+    }
 
     if (launcher.get_init()) {
         app_state = InitState::ZeroPointInitializing;
@@ -193,9 +203,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 }
 
 /**
- * @brief Toggle heartbeat LED at    float angle_now;
-    float delta_angle;
-    float initial_speed; a fixed interval.
+ * @brief Toggle heartbeat LED
  */
 void update_heartbeat_led()
 {

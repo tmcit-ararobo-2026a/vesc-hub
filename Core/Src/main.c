@@ -20,7 +20,6 @@
 #include "main.h"
 #include "adc.h"
 #include "fdcan.h"
-#include "gpdma.h"
 #include "icache.h"
 #include "tim.h"
 #include "usb.h"
@@ -92,7 +91,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_GPDMA1_Init();
   MX_FDCAN1_Init();
   MX_FDCAN2_Init();
   MX_TIM1_Init();
@@ -102,8 +100,8 @@ int main(void)
   MX_TIM8_Init();
   MX_TIM6_Init();
   MX_ICACHE_Init();
-  MX_TIM7_Init();
   MX_ADC1_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
     setup();
   /* USER CODE END 2 */

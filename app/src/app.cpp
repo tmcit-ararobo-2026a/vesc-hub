@@ -35,6 +35,7 @@ gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 float target_vel_from_mainboard{};
 float feedback_angular_velocity{};
 float feedback_velocity{};
+bool start = false;
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -156,6 +157,10 @@ void loop()
     if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
             encoder.reset();
+            if (!start) {
+                total_encoder_rad = 0.0f;
+                start             = true;
+            }
             app_state = InitState::InitializingPosition;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {

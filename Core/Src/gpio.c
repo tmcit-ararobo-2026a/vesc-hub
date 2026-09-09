@@ -40,6 +40,7 @@
      PB1   ------> OCTOSPI1_IO0
      PB2   ------> OCTOSPI1_CLK
      PA13(JTMS/SWDIO)   ------> DEBUG_JTMS-SWDIO
+     PB6   ------> S_TIM4_CH1
 */
 void MX_GPIO_Init(void)
 {
@@ -162,27 +163,13 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(POWER_MONITOR_GPIO_Port, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI8_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI8_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI9_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI10_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI10_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI11_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI11_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI12_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI12_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI14_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI14_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI15_IRQn, 8, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_IRQn);
+  /*Configure GPIO pin : ENC4_B_Pin */
+  GPIO_InitStruct.Pin = ENC4_B_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
+  HAL_GPIO_Init(ENC4_B_GPIO_Port, &GPIO_InitStruct);
 
 }
 

@@ -68,7 +68,7 @@ void HAL_MspInit(void)
 
   /* System interrupt init*/
   /* DebugMonitor_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DebugMonitor_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(DebugMonitor_IRQn, 7, 0);
 
   /* USER CODE BEGIN MspInit 1 */
 

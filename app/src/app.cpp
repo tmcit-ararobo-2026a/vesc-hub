@@ -133,7 +133,7 @@ void loop()
 {
     // ホールセンサーの設定
     HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 100);
+    HAL_ADC_PollForConversion(&hadc1, 10);
     int32_t adc_val = HAL_ADC_GetValue(&hadc1);
     float voltage   = (float)adc_val / 4095.0f * 3.3f;
 

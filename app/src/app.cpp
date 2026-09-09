@@ -35,7 +35,7 @@ gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 float target_vel_from_mainboard{};
 float feedback_angular_velocity{};
 float feedback_velocity{};
-bool enable_injection = false;
+bool fire = false;
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
@@ -145,10 +145,10 @@ void loop()
     }
 
     // 司令を受信
-    launcher.get_fire_command(target_vel_from_mainboard);
+    fire = launcher.get_fire_command(target_vel_from_mainboard);
 
     // 射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
-    if (enable_injection) {
+    if (fire && app_state == InitState::Ready) {
         target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
     } else {
         target_erpm = 0.0f;
@@ -171,9 +171,8 @@ void loop()
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            app_state        = InitState::Ready;
-            target_erpm      = 0.0f;
-            enable_injection = true;  // 射出許可
+            app_state   = InitState::Ready;
+            target_erpm = 0.0f;
         } else {
             target_erpm = TARGET_ERPM_INIT;
         }
@@ -184,8 +183,7 @@ void loop()
         if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
             feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
             launcher.send_release_point(feedback_velocity);
-            app_state        = InitState::ZeroPointInitializing;
-            enable_injection = false;  // 射出停止
+            app_state = InitState::ZeroPointInitializing;
         }
     }
 

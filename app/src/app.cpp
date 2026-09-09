@@ -146,8 +146,6 @@ void loop()
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
         target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
-    } else {
-        target_erpm = 0.0f;
     }
 
     if (launcher.get_init()) {
@@ -169,7 +167,8 @@ void loop()
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            app_state   = InitState::Ready;
+            app_state = InitState::Ready;
+            launcher.send_initial_point(total_encoder_rad);
             target_erpm = 0.0f;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {

@@ -33,7 +33,7 @@ gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
 float target_vel_from_mainboard{};
-float feedback_angular_velocity{};
+volatile float feedback_angular_velocity{};
 float feedback_velocity{};
 bool start = false;
 
@@ -54,7 +54,7 @@ constexpr float ROTATION_DIRECTION      = -1.0f;
 float target_erpm = 0.0f;
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
-float total_encoder_rad = 0.0f;
+volatile float total_encoder_rad = 0.0f;
 
 // ホールセンサ
 bool magnet_near             = false;
@@ -98,6 +98,7 @@ void timer_1khz_process()
     int16_t encoder_count = encoder.read_and_reset_count();
     feedback_angular_velocity =
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
+    feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
     total_encoder_rad = encoder.accumulate_angle_rad(encoder_count);
 }
 
@@ -185,7 +186,6 @@ void loop()
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
-            feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
             launcher.send_release_point(feedback_velocity);
             app_state = InitState::ZeroPointInitializing;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);

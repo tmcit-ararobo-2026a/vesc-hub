@@ -55,6 +55,9 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern DMA_NodeTypeDef Node_GPDMA1_Channel0;
+extern DMA_QListTypeDef List_GPDMA1_Channel0;
+extern DMA_HandleTypeDef handle_GPDMA1_Channel0;
 extern FDCAN_HandleTypeDef hfdcan1;
 extern FDCAN_HandleTypeDef hfdcan2;
 extern TIM_HandleTypeDef htim6;
@@ -202,101 +205,17 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles EXTI Line8 interrupt.
+  * @brief This function handles GPDMA1 Channel 0 global interrupt.
   */
-void EXTI8_IRQHandler(void)
+void GPDMA1_Channel0_IRQHandler(void)
 {
-  /* USER CODE BEGIN EXTI8_IRQn 0 */
+  /* USER CODE BEGIN GPDMA1_Channel0_IRQn 0 */
 
-  /* USER CODE END EXTI8_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM3_1_Pin);
-  /* USER CODE BEGIN EXTI8_IRQn 1 */
+  /* USER CODE END GPDMA1_Channel0_IRQn 0 */
+  HAL_DMA_IRQHandler(&handle_GPDMA1_Channel0);
+  /* USER CODE BEGIN GPDMA1_Channel0_IRQn 1 */
 
-  /* USER CODE END EXTI8_IRQn 1 */
-}
-
-/**
-  * @brief This function handles EXTI Line9 interrupt.
-  */
-void EXTI9_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI9_IRQn 0 */
-
-  /* USER CODE END EXTI9_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM3_2_Pin);
-  /* USER CODE BEGIN EXTI9_IRQn 1 */
-
-  /* USER CODE END EXTI9_IRQn 1 */
-}
-
-/**
-  * @brief This function handles EXTI Line10 interrupt.
-  */
-void EXTI10_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI10_IRQn 0 */
-
-  /* USER CODE END EXTI10_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM4_2_Pin);
-  /* USER CODE BEGIN EXTI10_IRQn 1 */
-
-  /* USER CODE END EXTI10_IRQn 1 */
-}
-
-/**
-  * @brief This function handles EXTI Line11 interrupt.
-  */
-void EXTI11_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI11_IRQn 0 */
-
-  /* USER CODE END EXTI11_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM2_1_Pin);
-  /* USER CODE BEGIN EXTI11_IRQn 1 */
-
-  /* USER CODE END EXTI11_IRQn 1 */
-}
-
-/**
-  * @brief This function handles EXTI Line12 interrupt.
-  */
-void EXTI12_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI12_IRQn 0 */
-
-  /* USER CODE END EXTI12_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM2_2_Pin);
-  /* USER CODE BEGIN EXTI12_IRQn 1 */
-
-  /* USER CODE END EXTI12_IRQn 1 */
-}
-
-/**
-  * @brief This function handles EXTI Line14 interrupt.
-  */
-void EXTI14_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI14_IRQn 0 */
-
-  /* USER CODE END EXTI14_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM1_1_Pin);
-  /* USER CODE BEGIN EXTI14_IRQn 1 */
-
-  /* USER CODE END EXTI14_IRQn 1 */
-}
-
-/**
-  * @brief This function handles EXTI Line15 interrupt.
-  */
-void EXTI15_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI15_IRQn 0 */
-
-  /* USER CODE END EXTI15_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(LIM1_2_Pin);
-  /* USER CODE BEGIN EXTI15_IRQn 1 */
-
-  /* USER CODE END EXTI15_IRQn 1 */
+  /* USER CODE END GPDMA1_Channel0_IRQn 1 */
 }
 
 /**

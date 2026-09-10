@@ -60,6 +60,7 @@ volatile float total_encoder_rad = 0.0f;
 bool magnet_near             = false;
 float voltage_threshold_high = 2.0f;
 float voltage_threshold_low  = 1.8f;
+uint32_t adc_raw_value{};
 
 // LED点滅
 constexpr uint32_t HEARTBEAT_TOGGLE_INTERCAL_MS = 500;
@@ -120,11 +121,14 @@ void setup()
     can2_driver.init();
     // Encoderの初期化
     encoder.hardware_init();
+    HAL_Delay(100);
     // ADCのキャリブレーション
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
     // タイマーを有効化
     HAL_TIM_Base_Start_IT(&htim7);
     HAL_TIM_Base_Start_IT(&htim6);
+    // ADCスタート
+    HAL_ADC_Start_DMA(&hadc1, &adc_raw_value, 1);
     // Tickを初期化
     heartbeat_last_toggle_time_ms = HAL_GetTick();
 }
@@ -132,10 +136,7 @@ void setup()
 void loop()
 {
     // ホールセンサーの設定
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    int32_t adc_val = HAL_ADC_GetValue(&hadc1);
-    float voltage   = (float)adc_val / 4095.0f * 3.3f;
+    float voltage = (float)adc_raw_value / 4095.0f * 3.3f;
 
     // ホールセンサー反応処理
     if (voltage > voltage_threshold_high) {

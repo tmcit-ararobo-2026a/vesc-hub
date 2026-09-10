@@ -1,14 +1,16 @@
 #include "app/app.hpp"
 
-#include "adc.h"
+/* app */
+#include "app/incremental_encoder.hpp"
 #include "app/vesc_can.hpp"
-#include "gn10_can/core/can_bus.hpp"
-#include "gn10_can/core/fdcan_bus.hpp"
-#include "gn10_can/devices/esc_hub_server.hpp"
-#include "gn10_can/devices/motor_driver_types.hpp"
+/* gn10-can*/
+#include "gn10_can/devices/launcher_server.hpp"
+/* fdcan driver*/
 #include "gn10_stm32_fdcan_driver/can_callback_helper.hpp"
 #include "gn10_stm32_fdcan_driver/can_driver.hpp"
 #include "gn10_stm32_fdcan_driver/fdcan_driver.hpp"
+/* stm */
+#include "adc.h"
 #include "tim.h"
 
 #define VESC_ID 43  // 43 or 45
@@ -16,38 +18,45 @@
 // タイマー使用
 volatile bool timer_1khz_triggered;
 volatile bool timer_100hz_triggered;
+
 // 状態管理用
-bool init               = false;
-bool init_command       = false;
-bool wait_for_belt_stop = false;
+enum class InitState {
+    WaitForInit,
+    ZeroPointInitializing,
+    InitializingPosition,
+    Ready,
+} app_state;
 
 // メイン基板との通信に使用
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
-gn10_can::devices::ESCHubServer esc_hub(fdcan1_bus, 0);
-gn10_can::devices::MotorConfig motor_config_belt;
-uint8_t motor_id                   = 0;
-float target_vel_from_mainboard[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
+
+float target_vel_from_mainboard{};
+volatile float feedback_angular_velocity{};
+float feedback_velocity{};
+bool start = false;
 
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO0, true);
 VescCAN vesc(can2_driver);
 
 // constants
-constexpr float RPM_CONVERSION_CONSTANT  = -46000.0f;
-constexpr float TARGET_RPM_INIT          = -2500.0f;
-constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
-constexpr float A_ROTATE_ANGLE           = 360.0f;
-constexpr float DISTANCE_PER_ROTATION    = 0.12f;
+constexpr float TARGET_ERPM_INIT        = 2500.0f;
+constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
+constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
+constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
+constexpr float MOTOR_POLES             = 14.0f;
+constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
+constexpr float ROTATION_DIRECTION      = -1.0f;
 
 // VESC関係
-float target_rpm = 0.0f;
+float target_erpm = 0.0f;
 // エンコーダー関係
-float rotate_count = 0.0f;
-float angle_last   = 0.0f;
-float absolute_angle;
+gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
+volatile float total_encoder_rad = 0.0f;
+
 // ホールセンサ
-bool movement                = false;
 bool magnet_near             = false;
 float voltage_threshold_high = 2.0f;
 float voltage_threshold_low  = 1.8f;
@@ -58,142 +67,144 @@ uint32_t heartbeat_last_toggle_time_ms          = 0;
 
 // setting function
 void update_heartbeat_led();
-void send_anglar_data(float angular_data[4]);
+void send_anglar_data(std::array<float, 4> send_data);
+
+/**
+ * @brief 回転数からradに変換
+ */
+float rotate_to_rad(float rotate)
+{
+    return rotate * M_PI * 2;
+}
+
+/**
+ * @brief 速度からrpmに変換
+ */
+float velocity_to_rpm(float velocity)
+{
+    return (velocity / (2 * M_PI * PULLEY_RADIUS)) * 60;
+}
+
+/**
+ * @brief 角速度から速度に変換
+ */
+float angular_velocity_to_velocity(float angular_velocity)
+{
+    return angular_velocity * PULLEY_RADIUS;
+}
+
 void timer_1khz_process()
 {
-    float angle_now;
-    float delta_angle;
-    float initial_speed;
-
-    angle_now     = absolute_angle;
-    delta_angle   = angle_now - angle_last;
-    initial_speed = ((delta_angle / A_ROTATE_ANGLE) * DISTANCE_PER_ROTATION) / 0.001f;
-
-    angle_last = angle_now;
-
-    HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
-    float speed_data[4] = {initial_speed, 0.0f, 0.0f, 0.0f};
-
-    // send
-    if (rotate_count > 11.4f && movement) {
-        if (wait_for_belt_stop) {
-            return;
-        } else {
-            esc_hub.set_feedbacks(speed_data);
-            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-            wait_for_belt_stop = true;
-        }
-
-    } else {
-        wait_for_belt_stop = false;
-        HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
-    }
+    int16_t encoder_count = encoder.read_and_reset_count();
+    feedback_angular_velocity =
+        encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
+    feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
+    total_encoder_rad = encoder.accumulate_angle_rad(encoder_count);
 }
 
 void timer_100hz_process()
 {
-    vesc.comm_can_set_rpm(VESC_ID, target_rpm);
+    // init処理が終わったら送信
+    if (app_state != InitState::WaitForInit) {
+        launcher.send_velocity_feedback(feedback_velocity);
+        vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
+    }
 }
+
 void setup()
 {
-    // encoder settings
-    HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
-    __HAL_TIM_SET_COUNTER(&htim3, 0);
-
-    // init
+    // 初期化待ちに設定
+    app_state = InitState::WaitForInit;
+    // CAN通信の開始
     fdcan1_driver.init();
     can2_driver.init();
-
-    // set tick
-    heartbeat_last_toggle_time_ms = HAL_GetTick();
-
-    // ADC
+    // Encoderの初期化
+    encoder.hardware_init();
+    // ADCのキャリブレーション
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-
-    // Wait until a command "belt_init" arrives
-    while (!esc_hub.get_init(motor_id, motor_config_belt)) {
-        HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
-    }
-    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
-
-    absolute_angle = 0;
-
-    // タイマーは最後に有効化
+    // タイマーを有効化
     HAL_TIM_Base_Start_IT(&htim7);
     HAL_TIM_Base_Start_IT(&htim6);
+    // Tickを初期化
+    heartbeat_last_toggle_time_ms = HAL_GetTick();
 }
 
 void loop()
 {
-    // 司令を受信
-    esc_hub.get_targets(target_vel_from_mainboard);
-    target_vel_from_mainboard[0] = std::clamp(target_vel_from_mainboard[0], 0.0f, 1.0f);
-
-    if (esc_hub.get_init(motor_id, motor_config_belt) && init_command) {
-        movement     = false;
-        init         = false;
-        init_command = false;
-    }
-
-    // エンコーダーのパルスカウントを取得
-    int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
-    __HAL_TIM_SET_COUNTER(&htim3, 0);
-    // １回転360度として正規化
-    float encoder_angle = encoder_count * (A_ROTATE_ANGLE / ENCODER_COUNT_PER_ROTATE);
-    // belt initで定めたゼロ点からの絶対角度[deg]
-    absolute_angle += encoder_angle;
-    rotate_count = absolute_angle / A_ROTATE_ANGLE;  // 回転回数[回]
-
-    // Hall sensor settings
+    // ホールセンサーの設定
     HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 100);
+    HAL_ADC_PollForConversion(&hadc1, 10);
     int32_t adc_val = HAL_ADC_GetValue(&hadc1);
     float voltage   = (float)adc_val / 4095.0f * 3.3f;
 
-    // Control Hall sensor
-    if (voltage > voltage_threshold_high && !magnet_near) {
+    // ホールセンサー反応処理
+    if (voltage > voltage_threshold_high) {
         magnet_near = true;
-    } else if (magnet_near && voltage < voltage_threshold_low) {
+    }
+    if (voltage < voltage_threshold_low) {
         magnet_near = false;
     }
 
-    // Control motor moving rpm
-    target_rpm = target_vel_from_mainboard[0] * RPM_CONVERSION_CONSTANT;
-
-    if (rotate_count > 11.5) {
-        movement = false;
+    // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
+    if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
+        target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
     }
 
-    if (movement && !init) {
-    } else {
-        if (!magnet_near) {
-            target_rpm = TARGET_RPM_INIT;
-        } else if (!init) {
-            target_rpm     = 0.0f;
-            absolute_angle = 0.0f;
-            angle_last     = 0.0f;
-            rotate_count   = 0.0f;
-            movement       = true;
-            init           = true;
-        }
+    if (launcher.get_init()) {
+        app_state = InitState::ZeroPointInitializing;
     }
 
-    if (init) {
-        if (rotate_count > 5.8) {
-            init         = false;
-            init_command = true;
+    // ホールセンサーまでのinit処理
+    if (app_state == InitState::ZeroPointInitializing) {
+        if (magnet_near) {
+            encoder.reset();
+            if (!start) {
+                total_encoder_rad = 0.0f;
+                start             = true;
+            }
+            app_state = InitState::InitializingPosition;
+            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
-            target_rpm = TARGET_RPM_INIT;
+            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+            target_erpm = TARGET_ERPM_INIT;
         }
     }
+
+    // ホールセンサーから初期位置までのinit処理
+    if (app_state == InitState::InitializingPosition) {
+        if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
+            app_state = InitState::Ready;
+            launcher.send_initial_point(total_encoder_rad);
+            target_erpm = 0.0f;
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+        } else {
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
+            target_erpm = TARGET_ERPM_INIT;
+        }
+    }
+
+    if (app_state == InitState::Ready) {
+        // しきい値を超えたらモーターを止めて、終速を送る処理
+        if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
+            launcher.send_release_point(feedback_velocity);
+            app_state = InitState::ZeroPointInitializing;
+            HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
+        }
+        HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
+    }
+
+    // send target
     if (timer_100hz_triggered) {
         timer_100hz_triggered = false;
         timer_100hz_process();
     }
+
+    // send feedback
     if (timer_1khz_triggered) {
         timer_1khz_triggered = false;
         timer_1khz_process();
     }
+
     update_heartbeat_led();
 }
 
@@ -226,9 +237,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 }
 
 /**
- * @brief Toggle heartbeat LED at    float angle_now;
-    float delta_angle;
-    float initial_speed; a fixed interval.
+ * @brief Toggle heartbeat LED
  */
 void update_heartbeat_led()
 {

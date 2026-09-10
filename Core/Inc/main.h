@@ -81,33 +81,18 @@ void Error_Handler(void);
 #define FLASH_CLK_GPIO_Port GPIOB
 #define LIM1_1_Pin GPIO_PIN_14
 #define LIM1_1_GPIO_Port GPIOB
-#define LIM1_1_EXTI_IRQn EXTI14_IRQn
 #define LIM1_2_Pin GPIO_PIN_15
 #define LIM1_2_GPIO_Port GPIOB
-#define LIM1_2_EXTI_IRQn EXTI15_IRQn
 #define LIM2_1_Pin GPIO_PIN_11
 #define LIM2_1_GPIO_Port GPIOD
-#define LIM2_1_EXTI_IRQn EXTI11_IRQn
 #define LIM2_2_Pin GPIO_PIN_12
 #define LIM2_2_GPIO_Port GPIOD
-#define LIM2_2_EXTI_IRQn EXTI12_IRQn
-#define ENC1_B_Pin GPIO_PIN_6
-#define ENC1_B_GPIO_Port GPIOC
-#define ENC1_A_Pin GPIO_PIN_7
-#define ENC1_A_GPIO_Port GPIOC
 #define LIM3_1_Pin GPIO_PIN_8
 #define LIM3_1_GPIO_Port GPIOC
-#define LIM3_1_EXTI_IRQn EXTI8_IRQn
 #define LIM3_2_Pin GPIO_PIN_9
 #define LIM3_2_GPIO_Port GPIOC
-#define LIM3_2_EXTI_IRQn EXTI9_IRQn
-#define ENC2_B_Pin GPIO_PIN_8
-#define ENC2_B_GPIO_Port GPIOA
-#define ENC2_A_Pin GPIO_PIN_9
-#define ENC2_A_GPIO_Port GPIOA
 #define LIM4_2_Pin GPIO_PIN_10
 #define LIM4_2_GPIO_Port GPIOA
-#define LIM4_2_EXTI_IRQn EXTI10_IRQn
 #define ID_4_SW_Pin GPIO_PIN_15
 #define ID_4_SW_GPIO_Port GPIOA
 #define ID_2_SW_Pin GPIO_PIN_10
@@ -120,8 +105,6 @@ void Error_Handler(void);
 #define ENC3_A_GPIO_Port GPIOB
 #define ENC4_B_Pin GPIO_PIN_6
 #define ENC4_B_GPIO_Port GPIOB
-#define ENC4_A_Pin GPIO_PIN_7
-#define ENC4_A_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

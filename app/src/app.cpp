@@ -10,7 +10,6 @@
 #include "gn10_stm32_fdcan_driver/can_driver.hpp"
 #include "gn10_stm32_fdcan_driver/fdcan_driver.hpp"
 /* stm */
-#include "adc.h"
 #include "tim.h"
 
 #define VESC_ID 43  // 43 or 45
@@ -121,7 +120,6 @@ void setup()
     // Encoderの初期化
     encoder.hardware_init();
     // ADCのキャリブレーション
-    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
     // タイマーを有効化
     HAL_TIM_Base_Start_IT(&htim7);
     HAL_TIM_Base_Start_IT(&htim6);
@@ -131,20 +129,6 @@ void setup()
 
 void loop()
 {
-    // ホールセンサーの設定
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    int32_t adc_val = HAL_ADC_GetValue(&hadc1);
-    float voltage   = (float)adc_val / 4095.0f * 3.3f;
-
-    // ホールセンサー反応処理
-    if (voltage > voltage_threshold_high) {
-        magnet_near = true;
-    }
-    if (voltage < voltage_threshold_low) {
-        magnet_near = false;
-    }
-
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
         target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);

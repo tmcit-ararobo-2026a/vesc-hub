@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "adc.h"
 #include "fdcan.h"
 #include "icache.h"
 #include "tim.h"
@@ -94,7 +93,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ADC1_Init();
   MX_FDCAN1_Init();
   MX_FDCAN2_Init();
   MX_ICACHE_Init();

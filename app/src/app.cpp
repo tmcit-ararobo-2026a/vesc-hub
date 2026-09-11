@@ -206,6 +206,7 @@ void loop()
     }
 
     update_heartbeat_led();
+    HAL_Delay(1);
 }
 
 // CAN Receive CAllback

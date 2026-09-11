@@ -53,7 +53,7 @@ constexpr float ROTATION_DIRECTION      = -1.0f;
 // VESC関係
 float target_erpm = 0.0f;
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(4095, &htim3, TIM3);
+gn10_motor::IncrementalEncoder encoder(4095, &htim3);
 volatile float total_encoder_rad = 0.0f;
 
 // ホールセンサ

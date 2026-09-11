@@ -20,10 +20,8 @@ namespace gn10_motor {
 // 2π 定数 (M_PI は POSIX 拡張のため constexpr で定義)
 static constexpr float TWO_PI = 6.28318530f;
 
-IncrementalEncoder::IncrementalEncoder(
-    uint16_t max_count, TIM_HandleTypeDef* htim, TIM_TypeDef* htim_channel
-)
-    : max_count_(max_count), enc_total_(0.0f), htim_(htim), htim_channel_(htim_channel)
+IncrementalEncoder::IncrementalEncoder(uint16_t max_count, TIM_HandleTypeDef* htim)
+    : max_count_(max_count), enc_total_(0.0f), htim_(htim)
 {
 }
 
@@ -36,8 +34,8 @@ int16_t IncrementalEncoder::read_and_reset_count()
 {
     // 読み取りとリセットの間に割り込みが入ると最大 1 ティックの誤差が生じる
     // 許容誤差範囲内であるため対策しない
-    uint16_t raw       = htim_channel_->CNT;
-    htim_channel_->CNT = 0U;
+    uint16_t raw = __HAL_TIM_GET_COUNTER(htim_);
+    __HAL_TIM_SET_COUNTER(htim_, 0);
     return static_cast<int16_t>(raw);
 }
 
@@ -59,8 +57,8 @@ float IncrementalEncoder::accumulate_angle_rad(int16_t count)
 
 void IncrementalEncoder::reset()
 {
-    enc_total_         = 0.0f;
-    htim_channel_->CNT = 0U;
+    enc_total_ = 0.0f;
+    __HAL_TIM_SET_COUNTER(htim_, 0);
 }
 
 }  // namespace gn10_motor

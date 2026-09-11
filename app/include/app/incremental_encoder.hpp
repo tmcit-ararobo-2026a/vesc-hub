@@ -27,7 +27,7 @@ namespace gn10_motor {
 class IncrementalEncoder
 {
 public:
-    IncrementalEncoder(uint16_t max_count, TIM_HandleTypeDef* htim, TIM_TypeDef* htim_channel);
+    IncrementalEncoder(uint16_t max_count, TIM_HandleTypeDef* htim);
     ~IncrementalEncoder() = default;
 
     /**
@@ -72,7 +72,6 @@ private:
     const uint16_t max_count_;  ///< 1回転あたりのカウント数 (分解能)
     float enc_total_;           ///< 積算角度 [rad]
     TIM_HandleTypeDef* htim_;
-    TIM_TypeDef* htim_channel_;
 };
 
 }  // namespace gn10_motor

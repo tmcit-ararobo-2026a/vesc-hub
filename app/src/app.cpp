@@ -116,6 +116,7 @@ void setup()
     // 初期化待ちに設定
     app_state = InitState::WaitForInit;
     // CAN通信の開始
+    fdcan1_driver.set_tx_timeout(2);
     fdcan1_driver.init();
     can2_driver.init();
     // Encoderの初期化

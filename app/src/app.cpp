@@ -27,6 +27,8 @@ uint32_t send_encoder_data_last_time_ms            = 0;
 constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
 constexpr float A_ROTATE_ANGLE           = 360.0f;
 
+float rotate_count{};
+float absolute_angle{};
 float encoder_angle = 0;
 
 void update_heartbeat_led()
@@ -38,13 +40,13 @@ void update_heartbeat_led()
     }
 }
 
-void send_encoder_data()
+void send_encoder_data(float value)
 {
     const uint32_t now_ms = HAL_GetTick();
     if ((now_ms - send_encoder_data_last_time_ms) >= k_send_encoder_data_interval_ms) {
         send_encoder_data_last_time_ms = now_ms;
-        launcher.send_velocity_feedback(encoder_angle);
-        HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
+        launcher.send_velocity_feedback(value);
+        HAL_GPIO_TogglePin(LED_3_GPIO_Port, LED_3_Pin);
     }
 }
 
@@ -52,10 +54,13 @@ void setup()
 {
     // CAN通信の開始
     fdcan1_driver.init();
+    fdcan1_driver.set_tx_timeout(2);
+
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
     __HAL_TIM_SET_COUNTER(&htim3, 0);
+
     send_encoder_data_last_time_ms = HAL_GetTick();
-    while (launcher.get_init()) {
+    while (!launcher.get_init()) {
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
     }
     HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
@@ -63,12 +68,13 @@ void setup()
 
 void loop()
 {
-    // encoder
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-    encoder_angle = encoder_count * (A_ROTATE_ANGLE / ENCODER_COUNT_PER_ROTATE);
+    float raw_encoder_value = static_cast<float>(encoder_count);
 
+    absolute_angle += raw_encoder_value;
+    send_encoder_data(absolute_angle);
     update_heartbeat_led();
 }
 

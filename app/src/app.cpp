@@ -25,6 +25,7 @@ enum class InitState {
     ZeroPointInitializing,
     InitializingPosition,
     Ready,
+    Jam,
 } app_state;
 
 // メイン基板との通信に使用
@@ -33,6 +34,7 @@ gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
 float target_vel_from_mainboard{};
+float rotate_vel_for_jam{};
 volatile float feedback_angular_velocity{};
 float feedback_velocity{};
 bool start = false;
@@ -192,6 +194,13 @@ void loop()
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         }
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
+    }
+
+    if (launcher.get_unjam_command(rotate_vel_for_jam)) {
+        app_state   = InitState::Jam;
+        target_erpm = velocity_to_rpm(rotate_vel_for_jam) * (MOTOR_POLES / 2);
+    } else if (app_state == InitState::Jam) {
+        target_erpm = 0.0f;
     }
 
     // send target

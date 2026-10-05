@@ -45,8 +45,10 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
+constexpr float TARGET_ERPM_JAM         = -2000.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
+constexpr float FOR_JAM_ROTATIONS       = -2.0f;
 constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
@@ -66,6 +68,11 @@ float voltage_threshold_low  = 1.8f;
 // LED点滅
 constexpr uint32_t HEARTBEAT_TOGGLE_INTERCAL_MS = 500;
 uint32_t heartbeat_last_toggle_time_ms          = 0;
+
+// ベル直ジャムり対策(後で可変)
+constexpr uint32_t FIRE_TIMEOUT = 2000;
+uint32_t count_fire_timeout_ms{};
+bool start_count = false;
 
 // setting function
 void update_heartbeat_led();
@@ -148,13 +155,24 @@ void loop()
         magnet_near = false;
     }
 
-    // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
+        if (!start_count) {
+            count_fire_timeout_ms = HAL_GetTick();
+            start_count           = true;
+        }
         target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
     }
 
     if (launcher.get_init()) {
         app_state = InitState::ZeroPointInitializing;
+    }
+
+    if (start_count) {
+        if (HAL_GetTick() - count_fire_timeout_ms > FIRE_TIMEOUT) {
+            app_state         = InitState::Jam;
+            total_encoder_rad = 0.0f;
+            start_count       = false;
+        }
     }
 
     // ホールセンサーまでのinit処理
@@ -190,17 +208,20 @@ void loop()
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
             launcher.send_release_point(feedback_velocity);
-            app_state = InitState::ZeroPointInitializing;
+            start_count = false;
+            app_state   = InitState::ZeroPointInitializing;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         }
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
     }
 
-    if (launcher.get_unjam_command(rotate_vel_for_jam)) {
-        app_state   = InitState::Jam;
-        target_erpm = velocity_to_rpm(rotate_vel_for_jam) * (MOTOR_POLES / 2);
-    } else if (app_state == InitState::Jam) {
-        target_erpm = 0.0f;
+    if (app_state == InitState::Jam) {
+        target_erpm = TARGET_ERPM_JAM;
+        if (total_encoder_rad < rotate_to_rad(FOR_JAM_ROTATIONS)) {
+            app_state   = InitState::WaitForInit;
+            start_count = false;
+            target_erpm = 0.0f;
+        }
     }
 
     // send target

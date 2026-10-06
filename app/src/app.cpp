@@ -9,9 +9,15 @@
 #include "gn10_stm32_fdcan_driver/can_callback_helper.hpp"
 #include "gn10_stm32_fdcan_driver/can_driver.hpp"
 #include "gn10_stm32_fdcan_driver/fdcan_driver.hpp"
+
 /* stm */
 #include "adc.h"
 #include "tim.h"
+#define VESC_ID 45
+
+// VESCとのCAN通信
+gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
+VescCAN vesc(can2_driver);
 
 gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
@@ -55,6 +61,7 @@ void setup()
     // CAN通信の開始
     fdcan1_driver.init();
     fdcan1_driver.set_tx_timeout(2);
+    can2_driver.init();
 
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
     __HAL_TIM_SET_COUNTER(&htim3, 0);
@@ -73,8 +80,9 @@ void loop()
 
     float raw_encoder_value = static_cast<float>(encoder_count);
 
+    vesc.comm_can_set_rpm(VESC_ID, 10000);
     absolute_angle += raw_encoder_value;
-    send_encoder_data(absolute_angle);
+    send_encoder_data(absolute_angle / 4096.0f);
     update_heartbeat_led();
 }
 

@@ -33,6 +33,11 @@ uint32_t send_encoder_data_last_time_ms            = 0;
 constexpr float ENCODER_COUNT_PER_ROTATE = 4096.0f;
 constexpr float A_ROTATE_ANGLE           = 360.0f;
 
+// ホールセンサ
+bool magnet_near             = false;
+float voltage_threshold_high = 2.0f;
+float voltage_threshold_low  = 1.8f;
+
 float rotate_count{};
 float absolute_angle{};
 float encoder_angle = 0;
@@ -77,6 +82,20 @@ void setup()
 bool get_init = false;
 void loop()
 {
+    // ホールセンサーの設定
+    HAL_ADC_Start(&hadc1);
+    HAL_ADC_PollForConversion(&hadc1, 10);
+    int32_t adc_val = HAL_ADC_GetValue(&hadc1);
+    float voltage   = (float)adc_val / 4095.0f * 3.3f;
+
+    // ホールセンサー反応処理
+    if (voltage > voltage_threshold_high) {
+        magnet_near = true;
+    }
+    if (voltage < voltage_threshold_low) {
+        magnet_near = false;
+    }
+
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
     __HAL_TIM_SET_COUNTER(&htim3, 0);
 
@@ -88,11 +107,17 @@ void loop()
     //    vesc.comm_can_set_rpm(VESC_ID, 35000);
 
     if (get_init) {
-        // vesc.comm_can_set_rpm(VESC_ID, 35000);
-        vesc.comm_can_set_current(VESC_ID, 10.0f);
+        vesc.comm_can_set_rpm(VESC_ID, -10000);
+        // vesc.comm_can_set_current(VESC_ID, 10.0f);
     } else {
-        // vesc.comm_can_set_rpm(VESC_ID, 0);
-        vesc.comm_can_set_current(VESC_ID, 0.0f);
+        vesc.comm_can_set_rpm(VESC_ID, 0);
+        // vesc.comm_can_set_current(VESC_ID, 0.0f);
+    }
+
+    if (magnet_near) {
+        get_init = false;
+    } else {
+        get_init = true;
     }
     absolute_angle += raw_encoder_value;
     send_encoder_data(absolute_angle / 4096.0f);

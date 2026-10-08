@@ -69,10 +69,12 @@ void setup()
     send_encoder_data_last_time_ms = HAL_GetTick();
     while (!launcher.get_init()) {
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+        vesc.comm_can_set_rpm(VESC_ID, 0);
     }
     HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
 }
 
+bool get_init = false;
 void loop()
 {
     int16_t encoder_count = static_cast<int16_t>(__HAL_TIM_GET_COUNTER(&htim3));
@@ -80,7 +82,18 @@ void loop()
 
     float raw_encoder_value = static_cast<float>(encoder_count);
 
-    vesc.comm_can_set_rpm(VESC_ID, 10000);
+    if (launcher.get_init()) {
+        get_init = !get_init;
+    }
+    //    vesc.comm_can_set_rpm(VESC_ID, 35000);
+
+    if (get_init) {
+        // vesc.comm_can_set_rpm(VESC_ID, 35000);
+        vesc.comm_can_set_current(VESC_ID, 10.0f);
+    } else {
+        // vesc.comm_can_set_rpm(VESC_ID, 0);
+        vesc.comm_can_set_current(VESC_ID, 0.0f);
+    }
     absolute_angle += raw_encoder_value;
     send_encoder_data(absolute_angle / 4096.0f);
     update_heartbeat_led();

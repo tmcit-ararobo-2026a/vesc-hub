@@ -35,8 +35,8 @@ constexpr float A_ROTATE_ANGLE           = 360.0f;
 
 // ホールセンサ
 bool magnet_near             = false;
-float voltage_threshold_high = 2.0f;
-float voltage_threshold_low  = 1.8f;
+float voltage_threshold_high = 0.9f;
+float voltage_threshold_low  = 0.7f;
 
 float rotate_count{};
 float absolute_angle{};
@@ -107,7 +107,7 @@ void loop()
     //    vesc.comm_can_set_rpm(VESC_ID, 35000);
 
     if (get_init) {
-        vesc.comm_can_set_rpm(VESC_ID, -10000);
+        vesc.comm_can_set_rpm(VESC_ID, -5000);
         // vesc.comm_can_set_current(VESC_ID, 10.0f);
     } else {
         vesc.comm_can_set_rpm(VESC_ID, 0);
@@ -116,8 +116,10 @@ void loop()
 
     if (magnet_near) {
         get_init = false;
+        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
     } else {
         get_init = true;
+        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
     }
     absolute_angle += raw_encoder_value;
     send_encoder_data(absolute_angle / 4096.0f);

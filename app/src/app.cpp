@@ -42,16 +42,18 @@ gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
 VescCAN vesc(can2_driver);
 
 // constants
-constexpr float TARGET_ERPM_INIT        = 2500.0f;
+constexpr float TARGET_DUTY_INIT        = 0.04f;
+constexpr float KE                      = 0.0202f;  // 逆起電力定数[V*s/rad]
+constexpr float OFFSET                  = 0.0f;     // 摩擦や抵抗の損失offset
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
-constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
 
 // VESC関係
-float target_erpm = 0.0f;
+float target_duty = 0.0f;
+
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4095, &htim3);
 volatile float total_encoder_rad = 0.0f;
@@ -69,6 +71,9 @@ uint32_t heartbeat_last_toggle_time_ms          = 0;
 void update_heartbeat_led();
 void send_anglar_data(std::array<float, 4> send_data);
 
+// duty control
+volatile float vbus{};  // can通信から取得する予定(今はデバッグ時に書き込むためvolatile )
+
 /**
  * @brief 回転数からradに変換
  */
@@ -78,11 +83,19 @@ float rotate_to_rad(float rotate)
 }
 
 /**
- * @brief 速度からrpmに変換
+ * @brief 速度から電圧に変換
  */
-float velocity_to_rpm(float velocity)
+float velocity_to_voltage(float velocity)
 {
-    return (velocity / (2 * M_PI * PULLEY_RADIUS)) * 60;
+    return KE / PULLEY_RADIUS * velocity + OFFSET;
+}
+
+/**
+ * @brief 電圧からdutyに変換
+ */
+float voltage_to_duty(float voltage)
+{
+    return voltage / vbus;
 }
 
 /**
@@ -107,7 +120,7 @@ void timer_100hz_process()
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
         launcher.send_velocity_feedback(feedback_velocity);
-        vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
+        vesc.comm_can_set_duty(VESC_ID, target_duty * ROTATION_DIRECTION);
     }
 }
 
@@ -148,7 +161,16 @@ void loop()
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
-        target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
+        if (vbus > 18.5) {
+            float target_voltage = velocity_to_voltage(target_vel_from_mainboard);
+            target_duty          = voltage_to_duty(target_voltage);
+            target_duty          = std::clamp(target_duty, 0.0f, 0.4f);
+        } else {
+            target_duty = 0.0f;
+        }
+
+        launcher.send_velocity_feedback(target_duty);  // duty
+        launcher.send_velocity_feedback(vbus);
     }
 
     if (launcher.get_init()) {
@@ -167,7 +189,7 @@ void loop()
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
-            target_erpm = TARGET_ERPM_INIT;
+            target_duty = TARGET_DUTY_INIT;
         }
     }
 
@@ -176,11 +198,11 @@ void loop()
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             app_state = InitState::Ready;
             launcher.send_initial_point(total_encoder_rad);
-            target_erpm = 0.0f;
+            target_duty = 0.0f;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-            target_erpm = TARGET_ERPM_INIT;
+            target_duty = TARGET_DUTY_INIT;
         }
     }
 

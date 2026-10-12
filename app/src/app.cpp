@@ -43,20 +43,20 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_DUTY_INIT        = 0.04f;
-constexpr float KE                      = 0.0202f;  // 逆起電力定数[V*s/rad]
-constexpr float OFFSET                  = 0.0f;     // 摩擦や抵抗の損失offset
+constexpr float KE                      = 1.132664f;   // 逆起電力定数[V*s/rad]
+constexpr float OFFSET                  = -0.057136f;  // 摩擦や抵抗の損失offset
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
-constexpr float MAX_DUTY                = 0.5f;
+constexpr float MAX_DUTY                = 0.7f;
 
 // VESC関係
 float target_duty = 0.0f;
 
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(4095, &htim3);
+gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 volatile float total_encoder_rad = 0.0f;
 
 // ホールセンサ
@@ -88,9 +88,8 @@ float rotate_to_rad(float rotate)
  */
 float velocity_to_voltage(float velocity)
 {
-    return KE / PULLEY_RADIUS * velocity + OFFSET;
+    return KE * velocity + OFFSET;
 }
-
 /**
  * @brief 電圧からdutyに変換
  */
@@ -120,7 +119,7 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        launcher.send_velocity_feedback(feedback_velocity);
+        // launcher.send_velocity_feedback(feedback_velocity);
         vesc.comm_can_set_duty(VESC_ID, target_duty * ROTATION_DIRECTION);
     }
 }
@@ -177,7 +176,6 @@ void loop()
         }
 
         launcher.send_velocity_feedback(target_duty);  // duty
-        launcher.send_velocity_feedback(vbus);
     }
 
     if (launcher.get_init()) {

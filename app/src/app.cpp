@@ -54,7 +54,7 @@ constexpr float MAX_DUTY                = 0.8f;
 float target_duty = 0.0f;
 
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(2000, &htim3);
+gn10_motor::IncrementalEncoder encoder(4096, &htim3);
 volatile float total_encoder_rad = 0.0f;
 
 // ホールセンサ

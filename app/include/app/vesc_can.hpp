@@ -80,6 +80,11 @@ public:
         return status5_.taco;
     }
 
+    float get_voltage() const
+    {
+        return status5_.voltage;
+    }
+
     void comm_can_set_handbrake_rel(uint8_t controller_id, float current_rel);
 
     gn10_can::drivers::ICANDriver& can_driver_;

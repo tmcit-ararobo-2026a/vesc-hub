@@ -13,7 +13,7 @@
 #include "adc.h"
 #include "tim.h"
 
-#define VESC_ID 43  // 43 or 45
+#define VESC_ID 45  // 43 or 45
 
 // タイマー使用
 volatile bool timer_1khz_triggered;
@@ -72,7 +72,7 @@ void update_heartbeat_led();
 void send_anglar_data(std::array<float, 4> send_data);
 
 // duty control
-volatile float vbus{};  // can通信から取得する予定(今はデバッグ時に書き込むためvolatile )
+float vbus{};
 
 /**
  * @brief 回転数からradに変換
@@ -145,7 +145,13 @@ void setup()
 
 void loop()
 {
-    // ホールセンサーの設定
+    // vesc受信処理
+    for (int i = 0; i < 8 && HAL_FDCAN_GetRxFifoFillLevel(&hfdcan2, FDCAN_RX_FIFO1) > 0; i++) {
+        vesc.update();
+        vbus = vesc.get_voltage();
+    }
+
+    //  ホールセンサーの設定
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, 10);
     int32_t adc_val = HAL_ADC_GetValue(&hadc1);

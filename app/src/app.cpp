@@ -43,14 +43,12 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_DUTY_INIT        = 0.04f;
-constexpr float KE                      = 1.132664f;   // 逆起電力定数[V*s/rad]
-constexpr float OFFSET                  = -0.057136f;  // 摩擦や抵抗の損失offset
 constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
-constexpr float MAX_DUTY                = 0.7f;
+constexpr float MAX_DUTY                = 0.8f;
 
 // VESC関係
 float target_duty = 0.0f;
@@ -88,8 +86,21 @@ float rotate_to_rad(float rotate)
  */
 float velocity_to_voltage(float velocity)
 {
-    return KE * velocity + OFFSET;
+    // 2.0 ~ 9.0 m/s : 直線
+    constexpr float KE_LOW     = 1.108862f;
+    constexpr float OFFSET_LOW = 0.104359f;
+    if (velocity <= 9.0f) {
+        return KE_LOW * velocity + OFFSET_LOW;
+    }
+
+    // 9.0 ~ 11.5 m/s : 2次式 (9.0 m/s で上の直線と連続)
+    constexpr float V9 = 10.084117f;  // = KE_LOW*9 + OFFSET_LOW
+    constexpr float M  = 1.18441f;
+    constexpr float Q  = 0.13243f;
+    const float d      = velocity - 9.0f;
+    return V9 + M * d + Q * d * d;
 }
+
 /**
  * @brief 電圧からdutyに変換
  */

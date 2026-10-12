@@ -50,6 +50,7 @@ constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
+constexpr float MAX_DUTY                = 0.5f;
 
 // VESC関係
 float target_duty = 0.0f;
@@ -170,7 +171,7 @@ void loop()
         if (vbus > 18.5) {
             float target_voltage = velocity_to_voltage(target_vel_from_mainboard);
             target_duty          = voltage_to_duty(target_voltage);
-            target_duty          = std::clamp(target_duty, 0.0f, 0.4f);
+            target_duty          = std::clamp(target_duty, 0.0f, MAX_DUTY);
         } else {
             target_duty = 0.0f;
         }

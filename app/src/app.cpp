@@ -43,12 +43,12 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_DUTY_INIT        = 0.04f;
-constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
+constexpr float RELEASE_POINT_ROTATIONS = 11.3f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
-constexpr float MAX_DUTY                = 0.8f;
+constexpr float MAX_DUTY                = 0.95f;
 
 // VESC関係
 float target_duty = 0.0f;
@@ -86,19 +86,22 @@ float rotate_to_rad(float rotate)
  */
 float velocity_to_voltage(float velocity)
 {
-    // 2.0 ~ 9.0 m/s : 直線
-    constexpr float KE_LOW     = 1.108862f;
-    constexpr float OFFSET_LOW = 0.104359f;
-    if (velocity <= 9.0f) {
-        return KE_LOW * velocity + OFFSET_LOW;
+    // 9.0m/s を超える入力は限界値(9.0m/s)にクランプ
+    if (velocity > 9.0f) {
+        velocity = 9.0f;
     }
 
-    // 9.0 ~ 11.5 m/s : 2次式 (9.0 m/s で上の直線と連続)
-    constexpr float V9 = 10.084117f;  // = KE_LOW*9 + OFFSET_LOW
-    constexpr float M  = 1.18441f;
-    constexpr float Q  = 0.13243f;
-    const float d      = velocity - 9.0f;
-    return V9 + M * d + Q * d * d;
+    if (velocity <= 7.5f) {
+        // 低〜中速域（直線領域）
+        constexpr float KE_LOW     = 1.252571f;
+        constexpr float OFFSET_LOW = -0.031791f;
+        return KE_LOW * velocity + OFFSET_LOW;
+    } else {
+        // 高速域（補正強）
+        constexpr float KE_HIGH     = 2.639981f;
+        constexpr float OFFSET_HIGH = -10.893098f;
+        return KE_HIGH * velocity + OFFSET_HIGH;
+    }
 }
 
 /**

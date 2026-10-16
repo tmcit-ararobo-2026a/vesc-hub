@@ -52,6 +52,7 @@ constexpr float ROTATION_DIRECTION      = -1.0f;
 
 // VESC関係
 float target_erpm = 0.0f;
+float feedback_rpm{};
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4095, &htim3);
 volatile float total_encoder_rad = 0.0f;
@@ -106,7 +107,7 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        launcher.send_velocity_feedback(feedback_velocity);
+        // launcher.send_velocity_feedback(feedback_velocity);
         vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -132,6 +133,12 @@ void setup()
 
 void loop()
 {
+    // vesc受信処理
+    for (int i = 0; i < 8 && HAL_FDCAN_GetRxFifoFillLevel(&hfdcan2, FDCAN_RX_FIFO1) > 0; i++) {
+        vesc.update();
+        feedback_rpm = vesc.get_rpm();
+    }
+
     // ホールセンサーの設定
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, 10);
@@ -188,6 +195,9 @@ void loop()
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (total_encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
             launcher.send_release_point(feedback_velocity);
+
+            float release_erpm = feedback_rpm;
+            launcher.send_velocity_feedback(release_erpm);
             app_state = InitState::ZeroPointInitializing;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         }

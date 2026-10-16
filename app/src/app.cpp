@@ -13,7 +13,7 @@
 #include "adc.h"
 #include "tim.h"
 
-#define VESC_ID 43  // 43 or 45
+#define VESC_ID 45  // 43 or 45
 
 // タイマー使用
 volatile bool timer_1khz_triggered;

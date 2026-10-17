@@ -1,5 +1,7 @@
 #include "app/app.hpp"
 
+#include "app/target_erpm.hpp"
+
 /* app */
 #include "app/incremental_encoder.hpp"
 #include "app/vesc_can.hpp"
@@ -155,7 +157,7 @@ void loop()
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
-        target_erpm = velocity_to_rpm(target_vel_from_mainboard) * (MOTOR_POLES / 2);
+        target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
     }
 
     if (launcher.get_init()) {

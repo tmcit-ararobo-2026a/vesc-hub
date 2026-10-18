@@ -46,9 +46,9 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 6.0f;
-constexpr float TUEN_ROTATIONS          = 12.0f;
-constexpr float INITIAL_POINT_ROTATIONS = 5.7f;
+constexpr float RELEASE_POINT_ROTATIONS = 8.0f;
+constexpr float TUEN_ROTATIONS          = 11.7f;
+constexpr float INITIAL_POINT_ROTATIONS = 5.9f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;

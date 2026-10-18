@@ -134,6 +134,8 @@ void timer_1khz_process()
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
     encoder_rad       = encoder.accumulate_angle_rad(encoder_count);
+    total_encoder_rad = encoder_rad - last_encoder_rad;
+    last_encoder_rad  = encoder_rad;
 }
 
 void timer_100hz_process()

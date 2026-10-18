@@ -15,7 +15,7 @@
 #include "adc.h"
 #include "tim.h"
 
-#define VESC_ID 45  // 43 or 45
+#define VESC_ID 43  // 43 or 45
 
 // タイマー使用
 volatile bool timer_1khz_triggered;
@@ -27,6 +27,8 @@ enum class InitState {
     ZeroPointInitializing,
     InitializingPosition,
     Ready,
+    GoToInitPlace,
+    Reset_rad,
 } app_state;
 
 // メイン基板との通信に使用
@@ -38,30 +40,32 @@ float target_vel_from_mainboard{};
 volatile float feedback_angular_velocity{};
 float feedback_velocity{};
 bool start = false;
-
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
 VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 11.5f;
+constexpr float RELEASE_POINT_ROTATIONS = 5.9f;
+constexpr float TUEN_ROTATIONS          = 12.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
-constexpr float PULLEY_RADIUS           = 0.019f;  //[m]
+constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
+constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
+constexpr float target_init_s           = 1.0f;
 
 // VESC関係
 float target_erpm = 0.0f;
 float feedback_rpm{};
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(4095, &htim3);
+gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 volatile float total_encoder_rad = 0.0f;
 
 // ホールセンサ
 bool magnet_near             = false;
-float voltage_threshold_high = 2.0f;
+float voltage_threshold_high = 2.1f;
 float voltage_threshold_low  = 1.8f;
 
 // LED点滅
@@ -85,7 +89,8 @@ float rotate_to_rad(float rotate)
  */
 float velocity_to_rpm(float velocity)
 {
-    return (velocity / (2 * M_PI * PULLEY_RADIUS)) * 60;
+    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
+    return (velocity / distance_per_rotation) * 60.0f;
 }
 
 /**
@@ -93,7 +98,17 @@ float velocity_to_rpm(float velocity)
  */
 float angular_velocity_to_velocity(float angular_velocity)
 {
-    return angular_velocity * PULLEY_RADIUS;
+    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
+    return angular_velocity * distance_per_rotation / (2.0f * M_PI);
+}
+
+/**
+ * @brief RPMから速度に変換
+ */
+float rpm_to_velocity(float rpm)
+{
+    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
+    return (rpm / 60.0f) * distance_per_rotation;
 }
 
 void timer_1khz_process()
@@ -156,8 +171,9 @@ void loop()
     }
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
-    if (launcher.get_fire_command(target_vel_from_mainboard) && app_state == InitState::Ready) {
+    if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
         target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
+        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
     }
 
     if (launcher.get_init()) {
@@ -168,11 +184,8 @@ void loop()
     if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
             encoder.reset();
-            if (!start) {
-                total_encoder_rad = 0.0f;
-                start             = true;
-            }
-            app_state = InitState::InitializingPosition;
+            total_encoder_rad = 0.0f;
+            app_state         = InitState::InitializingPosition;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
@@ -186,6 +199,8 @@ void loop()
             app_state = InitState::Ready;
             launcher.send_initial_point(total_encoder_rad);
             target_erpm = 0.0f;
+            encoder.reset();
+            total_encoder_rad = 0.0f;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
@@ -200,11 +215,26 @@ void loop()
 
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
-            app_state = InitState::ZeroPointInitializing;
+            app_state = InitState::GoToInitPlace;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         }
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
     }
+
+    if (app_state == InitState::GoToInitPlace) {
+        if (total_encoder_rad > rotate_to_rad(TUEN_ROTATIONS)) {
+            target_erpm = 0.0f;
+            encoder.reset();
+            total_encoder_rad = 0.0f;
+            launcher.send_initial_point(total_encoder_rad);
+            app_state = InitState::Ready;
+            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
+        } else {
+            target_erpm = TARGET_ERPM_INIT;
+        }
+    }
+    // launcher.send_velocity_feedback(static_cast<float>(app_state));
+    launcher.send_velocity_feedback(total_encoder_rad);
 
     // send target
     if (timer_100hz_triggered) {

@@ -21,6 +21,8 @@
 volatile bool timer_1khz_triggered;
 volatile bool timer_100hz_triggered;
 
+bool get_fire_command = false;
+
 // 状態管理用
 enum class InitState {
     WaitForInit,
@@ -47,8 +49,8 @@ VescCAN vesc(can2_driver);
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 8.0f;
-constexpr float TUEN_ROTATIONS          = 11.7f;
-constexpr float INITIAL_POINT_ROTATIONS = 5.9f;
+constexpr float TUEN_ROTATIONS          = 12.0f;
+constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
@@ -199,6 +201,11 @@ void loop()
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
+        if (!get_fire_command) {
+            encoder.reset();
+            total_encoder_rad = 0.0f;
+            get_fire_command  = true;
+        }
         target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
     }
@@ -254,7 +261,8 @@ void loop()
             encoder.reset();
             total_encoder_rad = 0.0f;
             launcher.send_initial_point(total_encoder_rad);
-            app_state = InitState::Ready;
+            app_state        = InitState::Ready;
+            get_fire_command = false;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             target_erpm = send_init_erpm(1, 0.01f);

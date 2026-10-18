@@ -46,7 +46,7 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 5.9f;
+constexpr float RELEASE_POINT_ROTATIONS = 9.0f;
 constexpr float TUEN_ROTATIONS          = 12.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
@@ -110,6 +110,13 @@ float rpm_to_velocity(float rpm)
     return (rpm / 60.0f) * distance_per_rotation;
 }
 
+float rad_to_distance(float rad)
+{
+    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
+
+    return rad / (2.0f * M_PI) * distance_per_rotation;
+}
+
 void timer_1khz_process()
 {
     int16_t encoder_count = encoder.read_and_reset_count();
@@ -137,14 +144,16 @@ void timer_100hz_process()
 float send_init_erpm(float target_init_s, float dt)
 {
     const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
-    const float init_distance = (TUEN_ROTATIONS - RELEASE_POINT_ROTATIONS) * distance_per_rotation;
+    const float init_distance =
+        (TUEN_ROTATIONS - rad_to_distance(total_encoder_rad)) * distance_per_rotation;
     const float target_velocity = init_distance / target_init_s;
     const float now_velocity    = rpm_to_velocity(feedback_rpm);
     const float acceleration    = (target_velocity - now_velocity) / target_init_s;
     const float next_velocity   = now_velocity + acceleration * dt;
     const float target_rpm      = velocity_to_rpm(next_velocity);
     const float target_erpm     = target_rpm * (MOTOR_POLES / 2.0f);
-    return std::clamp(target_erpm, 2000.0f, 10000.0f);
+
+    return std::clamp(target_erpm, 1000.0f, 10000.0f);
 }
 
 void setup()
@@ -248,7 +257,7 @@ void loop()
             app_state = InitState::Ready;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
-            target_erpm = send_init_erpm(2, 0.01f);
+            target_erpm = send_init_erpm(1, 0.01f);
         }
     }
     // launcher.send_velocity_feedback(static_cast<float>(app_state));

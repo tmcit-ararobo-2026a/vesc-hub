@@ -15,7 +15,7 @@
 #include "adc.h"
 #include "tim.h"
 
-#define VESC_ID 43  // 43 or 45
+#define VESC_ID 45  // 43 or 45
 
 // タイマー使用
 volatile bool timer_1khz_triggered;
@@ -46,9 +46,9 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 9.0f;
+constexpr float RELEASE_POINT_ROTATIONS = 6.0f;
 constexpr float TUEN_ROTATIONS          = 12.0f;
-constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
+constexpr float INITIAL_POINT_ROTATIONS = 5.7f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
@@ -59,7 +59,7 @@ constexpr float ROTATION_DIRECTION      = -1.0f;
 float target_erpm = 0.0f;
 float feedback_rpm{};
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(2000, &htim3);
+gn10_motor::IncrementalEncoder encoder(4000, &htim3);
 volatile float total_encoder_rad = 0.0f;
 
 // ホールセンサ
@@ -130,7 +130,7 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        // launcher.send_velocity_feedback(feedback_velocity);
+        launcher.send_velocity_feedback(feedback_velocity);
         vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -260,8 +260,6 @@ void loop()
             target_erpm = send_init_erpm(1, 0.01f);
         }
     }
-    // launcher.send_velocity_feedback(static_cast<float>(app_state));
-    launcher.send_velocity_feedback(total_encoder_rad);
 
     // send target
     if (timer_100hz_triggered) {

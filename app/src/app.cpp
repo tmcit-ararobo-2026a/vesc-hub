@@ -26,11 +26,11 @@ bool get_fire_command = false;
 // 状態管理用
 enum class InitState {
     WaitForInit,
+    GetRotationRad,
     ZeroPointInitializing,
     InitializingPosition,
     Ready,
     GoToInitPlace,
-    Reset_rad,
 } app_state;
 
 // メイン基板との通信に使用
@@ -41,7 +41,6 @@ gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 float target_vel_from_mainboard{};
 volatile float feedback_angular_velocity{};
 float feedback_velocity{};
-bool start = false;
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
 VescCAN vesc(can2_driver);
@@ -63,9 +62,11 @@ float feedback_rpm{};
 
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4000, &htim3);
-volatile float encoder_rad{};
+float encoder_rad{};
 float total_encoder_rad{};
 float last_encoder_rad{};
+volatile float rotation_rad{};  // 毎回init時に計測するベルト直動一周分の[rad]
+bool get_rotation = false;
 
 // ホールセンサ
 bool magnet_near             = false;
@@ -229,7 +230,29 @@ void loop()
     }
 
     if (launcher.get_init()) {
-        app_state = InitState::ZeroPointInitializing;
+        if (get_rotation) {
+            app_state = InitState::ZeroPointInitializing;
+        } else {
+            // hole sensorまでsetup
+            if (magnet_near) {
+                target_erpm = 0.0f;
+                reset_encoder_rad();
+                total_encoder_rad = 0.0f;
+                get_rotation      = true;
+                app_state == InitState::GetRotationRad;
+            } else {
+                target_erpm = TARGET_ERPM_INIT;
+            }
+        }
+    }
+
+    if (app_state == InitState::GetRotationRad) {
+        target_erpm = TARGET_ERPM_INIT;
+        if (magnet_near) {
+            target_erpm  = 0.0f;
+            rotation_rad = total_encoder_rad;
+            app_state    = InitState::Ready;
+        }
     }
 
     // ホールセンサーまでのinit処理
@@ -262,7 +285,6 @@ void loop()
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
             launcher.send_release_point(feedback_velocity);
-
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
             app_state = InitState::GoToInitPlace;

@@ -54,7 +54,6 @@ constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
-constexpr float target_init_s           = 1.0f;
 
 // VESC関係
 float target_erpm = 0.0f;
@@ -127,6 +126,25 @@ void timer_100hz_process()
         // launcher.send_velocity_feedback(feedback_velocity);
         vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
+}
+
+/**
+ * @brief 初期動作の目標ERPMを計算する
+ * @param target_init_s 目標速度に到達するまでの時間 [s]
+ * @param dt 制御周期 [s]
+ * @return 目標ERPM
+ */
+float send_init_erpm(float target_init_s, float dt)
+{
+    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
+    const float init_distance = (TUEN_ROTATIONS - RELEASE_POINT_ROTATIONS) * distance_per_rotation;
+    const float target_velocity = init_distance / target_init_s;
+    const float now_velocity    = rpm_to_velocity(feedback_rpm);
+    const float acceleration    = (target_velocity - now_velocity) / target_init_s;
+    const float next_velocity   = now_velocity + acceleration * dt;
+    const float target_rpm      = velocity_to_rpm(next_velocity);
+    const float target_erpm     = target_rpm * (MOTOR_POLES / 2.0f);
+    return std::clamp(target_erpm, 2000.0f, 10000.0f);
 }
 
 void setup()
@@ -230,7 +248,7 @@ void loop()
             app_state = InitState::Ready;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
-            target_erpm = TARGET_ERPM_INIT;
+            target_erpm = send_init_erpm(2, 0.01f);
         }
     }
     // launcher.send_velocity_feedback(static_cast<float>(app_state));

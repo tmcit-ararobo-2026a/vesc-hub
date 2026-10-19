@@ -30,7 +30,7 @@ enum class InitState {
     ZeroPointInitializing,
     InitializingPosition,
     Ready,
-    GoToInitPlace,
+    GoToInitPoint,
 } app_state;
 
 // メイン基板との通信に使用
@@ -48,13 +48,13 @@ VescCAN vesc(can2_driver);
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 8.0f;
-constexpr float TUEN_ROTATIONS          = 12.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
+volatile float rotation_rad{};  // 毎回init時に計測するベルト直動一周分の[rad]
 
 // VESC関係
 float target_erpm{};
@@ -65,7 +65,6 @@ gn10_motor::IncrementalEncoder encoder(4000, &htim3);
 float encoder_rad{};
 float total_encoder_rad{};
 float last_encoder_rad{};
-volatile float rotation_rad{};  // 毎回init時に計測するベルト直動一周分の[rad]
 bool get_rotation = false;
 
 // ホールセンサ
@@ -160,7 +159,7 @@ float send_init_erpm(float target_init_s, float dt)
 {
     const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
     const float init_distance =
-        (TUEN_ROTATIONS - rad_to_distance(encoder_rad)) * distance_per_rotation;
+        (rotation_rad - rad_to_distance(encoder_rad)) * distance_per_rotation;
     const float target_velocity = init_distance / target_init_s;
     const float now_velocity    = rpm_to_velocity(feedback_rpm);
     const float acceleration    = (target_velocity - now_velocity) / target_init_s;
@@ -239,7 +238,7 @@ void loop()
                 reset_encoder_rad();
                 total_encoder_rad = 0.0f;
                 get_rotation      = true;
-                app_state == InitState::GetRotationRad;
+                app_state         = InitState::GetRotationRad;
             } else {
                 target_erpm = TARGET_ERPM_INIT;
             }
@@ -287,14 +286,14 @@ void loop()
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
-            app_state = InitState::GoToInitPlace;
+            app_state = InitState::GoToInitPoint;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         }
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
     }
 
-    if (app_state == InitState::GoToInitPlace) {
-        if (encoder_rad > rotate_to_rad(TUEN_ROTATIONS)) {
+    if (app_state == InitState::GoToInitPoint) {
+        if (encoder_rad > rotation_rad) {
             target_erpm = 0.0f;
             launcher.send_initial_point(encoder_rad);
             get_fire_command = false;

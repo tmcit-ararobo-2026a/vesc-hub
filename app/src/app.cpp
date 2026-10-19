@@ -26,6 +26,7 @@ bool get_fire_command = false;
 // 状態管理用
 enum class InitState {
     WaitForInit,
+    FirstSetup,
     GetRotationRad,
     ZeroPointInitializing,
     InitializingPosition,
@@ -61,14 +62,16 @@ float target_erpm{};
 float feedback_rpm{};
 
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(4000, &htim3);
+gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 float encoder_rad{};
 float total_encoder_rad{};
 float last_encoder_rad{};
-bool get_rotation = false;
+bool get_rotation     = false;
+bool complete_measure = false;
 
 // ホールセンサ
 bool magnet_near             = false;
+bool last_magnet_near        = false;
 float voltage_threshold_high = 2.1f;
 float voltage_threshold_low  = 1.8f;
 
@@ -232,25 +235,40 @@ void loop()
         if (get_rotation) {
             app_state = InitState::ZeroPointInitializing;
         } else {
-            // hole sensorまでsetup
-            if (magnet_near) {
-                target_erpm = 0.0f;
-                reset_encoder_rad();
-                total_encoder_rad = 0.0f;
-                get_rotation      = true;
-                app_state         = InitState::GetRotationRad;
-            } else {
-                target_erpm = TARGET_ERPM_INIT;
-            }
+            app_state = InitState::FirstSetup;
+        }
+    }
+
+    if (app_state == InitState::FirstSetup) {
+        // hole sensorまでsetup
+        if (magnet_near) {
+            target_erpm = 0.0f;
+            reset_encoder_rad();
+            total_encoder_rad = 0.0f;
+            get_rotation      = true;
+            app_state         = InitState::GetRotationRad;
+            HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
+        } else {
+            target_erpm = TARGET_ERPM_INIT;
+            HAL_GPIO_TogglePin(LED_3_GPIO_Port, LED_3_Pin);
         }
     }
 
     if (app_state == InitState::GetRotationRad) {
-        target_erpm = TARGET_ERPM_INIT;
-        if (magnet_near) {
-            target_erpm  = 0.0f;
-            rotation_rad = total_encoder_rad;
-            app_state    = InitState::Ready;
+        if (!complete_measure) {
+            target_erpm = TARGET_ERPM_INIT;
+            if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS) && magnet_near) {
+                target_erpm  = 0.0f;
+                rotation_rad = encoder_rad;  // total_encoder_rad ではなく encoder_rad
+                reset_encoder_rad();
+                complete_measure = true;
+            }
+        } else {
+            if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
+                reset_encoder_rad();
+                total_encoder_rad = 0.0f;
+                app_state         = InitState::Ready;
+            }
         }
     }
 
@@ -316,6 +334,7 @@ void loop()
         timer_1khz_process();
     }
 
+    last_magnet_near = magnet_near;
     update_heartbeat_led();
 }
 

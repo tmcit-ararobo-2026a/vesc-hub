@@ -64,14 +64,13 @@ float feedback_rpm{};
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 float encoder_rad{};
-float total_encoder_rad{};
 float last_encoder_rad{};
 bool get_rotation     = false;
 bool complete_measure = false;
+uint16_t process_count{};
 
 // ホールセンサ
 bool magnet_near             = false;
-bool last_magnet_near        = false;
 float voltage_threshold_high = 2.1f;
 float voltage_threshold_low  = 1.8f;
 
@@ -137,7 +136,6 @@ void timer_1khz_process()
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
     encoder_rad       = encoder.accumulate_angle_rad(encoder_count);
-    total_encoder_rad = encoder_rad - last_encoder_rad;
     last_encoder_rad  = encoder_rad;
 }
 
@@ -160,9 +158,7 @@ void timer_100hz_process()
  */
 float send_init_erpm(float target_init_s, float dt)
 {
-    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
-    const float init_distance =
-        (rotation_rad - rad_to_distance(encoder_rad)) * distance_per_rotation;
+    const float init_distance   = rad_to_distance(rotation_rad * process_count - encoder_rad);
     const float target_velocity = init_distance / target_init_s;
     const float now_velocity    = rpm_to_velocity(feedback_rpm);
     const float acceleration    = (target_velocity - now_velocity) / target_init_s;
@@ -185,7 +181,7 @@ void setup()
     // 初期化待ちに設定
     app_state = InitState::WaitForInit;
     // CAN通信の開始
-    fdcan1_driver.set_tx_timeout(2);
+    fdcan1_driver.set_tx_timeout(5);
     fdcan1_driver.init();
     can2_driver.init();
     // Encoderの初期化
@@ -224,8 +220,8 @@ void loop()
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
         if (!get_fire_command) {
-            reset_encoder_rad();
             get_fire_command = true;
+            process_count++;
         }
         target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
@@ -233,20 +229,21 @@ void loop()
 
     if (launcher.get_init()) {
         if (get_rotation) {
-            app_state = InitState::ZeroPointInitializing;
+            app_state     = InitState::ZeroPointInitializing;
+            process_count = 0;
         } else {
             app_state = InitState::FirstSetup;
         }
     }
 
+    // only first
     if (app_state == InitState::FirstSetup) {
         // hole sensorまでsetup
         if (magnet_near) {
             target_erpm = 0.0f;
             reset_encoder_rad();
-            total_encoder_rad = 0.0f;
-            get_rotation      = true;
-            app_state         = InitState::GetRotationRad;
+            get_rotation = true;
+            app_state    = InitState::GetRotationRad;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         } else {
             target_erpm = TARGET_ERPM_INIT;
@@ -254,6 +251,7 @@ void loop()
         }
     }
 
+    // get rotation rad
     if (app_state == InitState::GetRotationRad) {
         if (!complete_measure) {
             target_erpm = TARGET_ERPM_INIT;
@@ -264,10 +262,10 @@ void loop()
                 complete_measure = true;
             }
         } else {
+            target_erpm = TARGET_ERPM_INIT;
             if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
                 reset_encoder_rad();
-                total_encoder_rad = 0.0f;
-                app_state         = InitState::Ready;
+                app_state = InitState::Ready;
             }
         }
     }
@@ -288,6 +286,7 @@ void loop()
     if (app_state == InitState::InitializingPosition) {
         if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             app_state = InitState::Ready;
+            reset_encoder_rad();
             launcher.send_initial_point(encoder_rad);
             target_erpm      = 0.0f;
             get_fire_command = false;
@@ -300,7 +299,8 @@ void loop()
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        if (encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS)) {
+        if (encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) +
+                              (rotation_rad * (static_cast<float>(process_count) - 1.0f))) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -311,7 +311,7 @@ void loop()
     }
 
     if (app_state == InitState::GoToInitPoint) {
-        if (encoder_rad > rotation_rad) {
+        if (encoder_rad > rotation_rad * static_cast<float>(process_count)) {
             target_erpm = 0.0f;
             launcher.send_initial_point(encoder_rad);
             get_fire_command = false;
@@ -334,7 +334,6 @@ void loop()
         timer_1khz_process();
     }
 
-    last_magnet_near = magnet_near;
     update_heartbeat_led();
 }
 

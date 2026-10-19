@@ -21,8 +21,6 @@
 volatile bool timer_1khz_triggered;
 volatile bool timer_100hz_triggered;
 
-bool get_fire_command = false;
-
 // 状態管理用
 enum class InitState {
     WaitForInit,
@@ -64,8 +62,6 @@ float feedback_rpm{};
 gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 float encoder_rad{};
 float last_encoder_rad{};
-bool complete_measure = false;
-float process_count{};
 float rotation_rad{};  // 一番最初のinit時のみ記録する一周分のrad
 
 // ホールセンサ
@@ -77,9 +73,9 @@ float voltage_threshold_low  = 1.8f;
 constexpr uint32_t HEARTBEAT_TOGGLE_INTERCAL_MS = 500;
 uint32_t heartbeat_last_toggle_time_ms          = 0;
 
-// setting function
-void update_heartbeat_led();
-void send_anglar_data(std::array<float, 4> send_data);
+// その他動作補助
+bool get_fire_command = false;
+float process_count{};
 
 /**  変換関数 **/
 
@@ -117,6 +113,7 @@ float rpm_to_velocity(float rpm)
     const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
     return (rpm / 60.0f) * distance_per_rotation;
 }
+
 /**
  * @brief radから距離に変換
  */
@@ -166,6 +163,18 @@ float send_init_erpm(float target_init_s, float dt)
     const float target_erpm     = target_rpm * (MOTOR_POLES / 2.0f);
 
     return std::clamp(target_erpm, 1000.0f, 10000.0f);
+}
+
+/**
+ * @brief Toggle heartbeat LED
+ */
+void update_heartbeat_led()
+{
+    const uint32_t now_ms = HAL_GetTick();
+    if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERCAL_MS) {
+        heartbeat_last_toggle_time_ms = now_ms;
+        HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
+    }
 }
 
 void reset_encoder_rad()
@@ -230,11 +239,11 @@ void loop()
         if (app_state == InitState::WaitForInit) {
             app_state = InitState::FirstSetup;
         } else {
+            // 一番最初のinitのみ
             app_state = InitState::ZeroPointInitializing;
         }
     }
 
-    // only first
     if (app_state == InitState::FirstSetup) {
         // hole sensorまでsetup
         if (magnet_near) {
@@ -246,7 +255,6 @@ void loop()
         }
     }
 
-    // get rotation rad
     if (app_state == InitState::GetRotationRad) {
         // 即時にホールセンサー反応しないように
         if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
@@ -350,17 +358,5 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
     // 1kHz
     if (htim->Instance == TIM7) {
         timer_1khz_triggered = true;
-    }
-}
-
-/**
- * @brief Toggle heartbeat LED
- */
-void update_heartbeat_led()
-{
-    const uint32_t now_ms = HAL_GetTick();
-    if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERCAL_MS) {
-        heartbeat_last_toggle_time_ms = now_ms;
-        HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
     }
 }

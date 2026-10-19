@@ -143,7 +143,7 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        launcher.send_velocity_feedback(feedback_velocity);
+        // launcher.send_velocity_feedback(feedback_velocity);
         vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -221,7 +221,6 @@ void loop()
     if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
         if (!get_fire_command) {
             get_fire_command = true;
-            process_count++;
         }
         target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
@@ -244,10 +243,8 @@ void loop()
             reset_encoder_rad();
             get_rotation = true;
             app_state    = InitState::GetRotationRad;
-            HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         } else {
             target_erpm = TARGET_ERPM_INIT;
-            HAL_GPIO_TogglePin(LED_3_GPIO_Port, LED_3_Pin);
         }
     }
 
@@ -265,6 +262,7 @@ void loop()
             target_erpm = TARGET_ERPM_INIT;
             if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
                 reset_encoder_rad();
+                process_count++;
                 app_state = InitState::Ready;
             }
         }
@@ -288,8 +286,8 @@ void loop()
             app_state = InitState::Ready;
             reset_encoder_rad();
             launcher.send_initial_point(encoder_rad);
-            target_erpm      = 0.0f;
             get_fire_command = false;
+            process_count++;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
@@ -299,8 +297,10 @@ void loop()
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        if (encoder_rad > rotate_to_rad(RELEASE_POINT_ROTATIONS) +
-                              (rotation_rad * (static_cast<float>(process_count) - 1.0f))) {
+        float release_rad = rotate_to_rad(RELEASE_POINT_ROTATIONS) +
+                            (rotation_rad * static_cast<float>(process_count - 1));
+
+        if (encoder_rad > release_rad) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -308,14 +308,16 @@ void loop()
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
         }
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
+        // launcher.send_velocity_feedback(release_rad);
     }
 
     if (app_state == InitState::GoToInitPoint) {
-        if (encoder_rad > rotation_rad * static_cast<float>(process_count)) {
+        if (encoder_rad > (rotation_rad * static_cast<float>(process_count))) {
             target_erpm = 0.0f;
             launcher.send_initial_point(encoder_rad);
             get_fire_command = false;
             app_state        = InitState::Ready;
+            process_count++;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             target_erpm = send_init_erpm(1, 0.01f);

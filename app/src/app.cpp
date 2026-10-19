@@ -63,6 +63,7 @@ gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 float encoder_rad{};
 float last_encoder_rad{};
 float rotation_rad{};  // 一番最初のinit時のみ記録する一周分のrad
+float total_encoder_rad{};
 
 // ホールセンサ
 bool magnet_near             = false;
@@ -132,7 +133,8 @@ void timer_1khz_process()
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
     encoder_rad       = encoder.accumulate_angle_rad(encoder_count);
-    last_encoder_rad  = encoder_rad;
+    total_encoder_rad += (encoder_rad - last_encoder_rad);
+    last_encoder_rad = encoder_rad;
 }
 
 void timer_100hz_process()
@@ -154,7 +156,7 @@ void timer_100hz_process()
  */
 float send_init_erpm(float target_init_s, float dt)
 {
-    const float init_distance   = rad_to_distance(rotation_rad * process_count - encoder_rad);
+    const float init_distance   = rad_to_distance(rotation_rad * process_count - total_encoder_rad);
     const float target_velocity = init_distance / target_init_s;
     const float now_velocity    = rpm_to_velocity(feedback_rpm);
     const float acceleration    = (target_velocity - now_velocity) / target_init_s;
@@ -175,13 +177,6 @@ void update_heartbeat_led()
         heartbeat_last_toggle_time_ms = now_ms;
         HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
     }
-}
-
-void reset_encoder_rad()
-{
-    encoder.reset();
-    encoder_rad      = 0.0f;
-    last_encoder_rad = 0.0f;
 }
 
 void setup()
@@ -247,9 +242,9 @@ void loop()
     if (app_state == InitState::FirstSetup) {
         // hole sensorまでsetup
         if (magnet_near) {
-            target_erpm = 0.0f;
-            reset_encoder_rad();
-            app_state = InitState::GetRotationRad;
+            target_erpm       = 0.0f;
+            total_encoder_rad = 0.0f;
+            app_state         = InitState::GetRotationRad;
         } else {
             target_erpm = TARGET_ERPM_INIT;
         }
@@ -257,22 +252,23 @@ void loop()
 
     if (app_state == InitState::GetRotationRad) {
         // 即時にホールセンサー反応しないように
-        if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
+        if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             if (magnet_near) {
-                rotation_rad = encoder_rad;  // 一周分のradを記録
-                target_erpm  = 0.0f;
-                reset_encoder_rad();
-                app_state = InitState::InitializingPosition;
+                rotation_rad      = total_encoder_rad;  // 一周分のradを記録
+                target_erpm       = 0.0f;
+                total_encoder_rad = 0.0f;
+                app_state         = InitState::InitializingPosition;
             }
+        } else {
+            target_erpm = TARGET_ERPM_INIT;
         }
-        target_erpm = TARGET_ERPM_INIT;
     }
 
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
-            reset_encoder_rad();
-            app_state = InitState::InitializingPosition;
+            total_encoder_rad = 0.0f;
+            app_state         = InitState::InitializingPosition;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
@@ -282,10 +278,11 @@ void loop()
 
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
-        if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            app_state = InitState::Ready;
-            reset_encoder_rad();
-            launcher.send_initial_point(encoder_rad);
+        if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
+            app_state         = InitState::Ready;
+            total_encoder_rad = 0.0f;
+            target_erpm       = 0.0f;
+            launcher.send_initial_point(total_encoder_rad);
             get_fire_command = false;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
@@ -298,7 +295,7 @@ void loop()
         // しきい値を超えたらモーターを止めて、終速を送る処理
         float check       = rotation_rad * (process_count - 1.0f);
         float release_rad = rotate_to_rad(INITIAL_POINT_ROTATIONS) + check;
-        if (encoder_rad > release_rad) {
+        if (total_encoder_rad > release_rad) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -309,9 +306,9 @@ void loop()
     }
 
     if (app_state == InitState::GoToInitPoint) {
-        if (encoder_rad > (rotation_rad * static_cast<float>(process_count))) {
+        if (total_encoder_rad > (rotation_rad * static_cast<float>(process_count))) {
             target_erpm = 0.0f;
-            launcher.send_initial_point(encoder_rad);
+            launcher.send_initial_point(total_encoder_rad);
             get_fire_command = false;
             app_state        = InitState::Ready;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);

@@ -1,0 +1,46 @@
+@startuml launcher_state_20261021_init_cycle
+!theme plain
+skinparam backgroundColor #ffffff
+
+title Launcher state transitions
+
+[*] --> WaitForInit : setup()
+
+state "WaitForInit\n初期化待ち" as WaitForInit
+state "ZeroPointInitializing\nホールセンサー検出" as ZeroPointInitializing
+state "InitializingPosition\n初期位置へ移動" as InitializingPosition
+state "Ready\n射出位置へ移動・射出待ち" as Ready
+state "GoToInitPoint\n次の初期位置へ復帰" as GoToInitPoint
+
+WaitForInit --> WaitForInit : init未受信
+WaitForInit --> ZeroPointInitializing : init受信\nprocess_count = 0
+
+ZeroPointInitializing --> ZeroPointInitializing : 磁石未検出\n初期速度で回転
+ZeroPointInitializing --> InitializingPosition : 磁石検出\nエンコーダをリセット
+
+InitializingPosition --> InitializingPosition : encoder_rad ≤ 5.85回転\n初期速度で回転
+InitializingPosition --> Ready : encoder_rad > 5.85回転\n停止・process_countを加算\n初期位置を通知
+
+Ready --> Ready : 射出指令受信\n目標ERPMを設定
+Ready --> Ready : encoder_rad ≤ 12回転 × process_count
+Ready --> GoToInitPoint : encoder_rad > 12回転 × process_count\n解放位置と速度を通知
+
+GoToInitPoint --> GoToInitPoint : encoder_rad ≤ 5.85回転 +\n12回転 × process_count\n復帰目標ERPMを設定
+GoToInitPoint --> Ready : encoder_rad > 5.85回転 +\n12回転 × process_count\n停止・process_countを加算\n初期位置を通知
+
+ZeroPointInitializing --> ZeroPointInitializing : init再受信\nprocess_count = 0
+InitializingPosition --> ZeroPointInitializing : init再受信\nprocess_count = 0
+Ready --> ZeroPointInitializing : init再受信\nprocess_count = 0
+GoToInitPoint --> ZeroPointInitializing : init再受信\nprocess_count = 0
+
+note right of ZeroPointInitializing
+  init受信で開始する。
+  磁石検出まで初期速度で回転する。
+end note
+
+note bottom of GoToInitPoint
+  100 Hzで目標ERPMをVESCへ送信。
+  1 kHzでエンコーダ角度と速度を更新。
+end note
+
+@enduml

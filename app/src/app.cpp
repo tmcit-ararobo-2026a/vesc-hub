@@ -61,8 +61,6 @@ float feedback_rpm{};
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4000, &htim3);
 float encoder_rad{};
-float last_encoder_rad{};
-float total_encoder_rad{};
 float rotation_rad{};  // 一番最初のinit時のみ記録する一周分のrad
 
 // ホールセンサ
@@ -133,8 +131,6 @@ void timer_1khz_process()
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
     feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
     encoder_rad       = encoder.accumulate_angle_rad(encoder_count);
-    total_encoder_rad += (encoder_rad - last_encoder_rad);
-    last_encoder_rad = encoder_rad;
 }
 
 void timer_100hz_process()
@@ -159,7 +155,7 @@ float send_init_erpm(float approach_time_s)
     const float pole_pairs = MOTOR_POLES / 2.0f;
 
     // 残り距離 [m](行き過ぎても負にならないようにする)
-    const float remaining_rad = rotation_rad * process_count - total_encoder_rad;
+    const float remaining_rad = rotation_rad * process_count - encoder_rad;
     const float remaining     = std::max(rad_to_distance(remaining_rad), 0.0f);
 
     // 最小ERPMに相当する速度 [m/s]
@@ -240,8 +236,8 @@ void loop()
     // ホールセンサーまでのinit処理
     if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
-            total_encoder_rad = 0.0f;
-            app_state         = InitState::InitializingPosition;
+            encoder.reset();
+            app_state = InitState::InitializingPosition;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
@@ -251,12 +247,12 @@ void loop()
 
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
-        if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
+        if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
-            app_state         = InitState::Ready;
-            total_encoder_rad = 0.0f;
-            target_erpm       = 0.0f;
-            launcher.send_initial_point(total_encoder_rad);
+            app_state = InitState::Ready;
+            encoder.reset();
+            target_erpm = 0.0f;
+            launcher.send_initial_point(encoder_rad);
             get_fire_command = false;
         } else {
             target_erpm = TARGET_ERPM_INIT;
@@ -273,7 +269,7 @@ void loop()
             add_rotation_rad = abs(rotation_rad * (process_count));
         }
         float release_rad = rotate_to_rad(RELEASE_POINT_ROTATIONS) + add_rotation_rad;
-        if (total_encoder_rad > release_rad) {
+        if (encoder_rad > release_rad) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -285,9 +281,9 @@ void loop()
     }
 
     if (app_state == InitState::GoToInitPoint) {
-        if (total_encoder_rad > (rotation_rad * static_cast<float>(process_count))) {
+        if (encoder_rad > (rotation_rad * static_cast<float>(process_count))) {
             target_erpm = 0.0f;
-            launcher.send_initial_point(total_encoder_rad);
+            launcher.send_initial_point(encoder_rad);
             get_fire_command = false;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
             app_state = InitState::Ready;

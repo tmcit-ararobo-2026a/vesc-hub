@@ -38,7 +38,7 @@ gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
 float target_vel_from_mainboard{};
-volatile float feedback_angular_velocity{};
+float feedback_angular_velocity{};
 float feedback_velocity{};
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
@@ -62,16 +62,16 @@ float feedback_rpm{};
 gn10_motor::IncrementalEncoder encoder(2000, &htim3);
 float encoder_rad{};
 float last_encoder_rad{};
-float rotation_rad{};  // 一番最初のinit時のみ記録する一周分のrad
 float total_encoder_rad{};
+float rotation_rad{};  // 一番最初のinit時のみ記録する一周分のrad
 
 // ホールセンサ
-bool magnet_near             = false;
-float voltage_threshold_high = 2.1f;
-float voltage_threshold_low  = 1.8f;
+bool magnet_near                   = false;
+const float voltage_threshold_high = 2.1f;
+const float voltage_threshold_low  = 1.8f;
 
 // LED点滅
-constexpr uint32_t HEARTBEAT_TOGGLE_INTERCAL_MS = 500;
+constexpr uint32_t HEARTBEAT_TOGGLE_INTERVAL_MS = 500;
 uint32_t heartbeat_last_toggle_time_ms          = 0;
 
 // その他動作補助
@@ -162,9 +162,9 @@ float send_init_erpm(float target_init_s, float dt)
     const float acceleration    = (target_velocity - now_velocity) / target_init_s;
     const float next_velocity   = now_velocity + acceleration * dt;
     const float target_rpm      = velocity_to_rpm(next_velocity);
-    const float target_erpm     = target_rpm * (MOTOR_POLES / 2.0f);
+    const float target_init_erpm = target_rpm * (MOTOR_POLES / 2.0f);
 
-    return std::clamp(target_erpm, 1000.0f, 10000.0f);
+    return std::clamp(target_init_erpm, 1000.0f, 10000.0f);
 }
 
 /**
@@ -173,7 +173,7 @@ float send_init_erpm(float target_init_s, float dt)
 void update_heartbeat_led()
 {
     const uint32_t now_ms = HAL_GetTick();
-    if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERCAL_MS) {
+    if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERVAL_MS) {
         heartbeat_last_toggle_time_ms = now_ms;
         HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
     }
@@ -227,14 +227,13 @@ void loop()
             process_count += 1.0f;
         }
         target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
-        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
     }
 
     if (launcher.get_init()) {
         if (app_state == InitState::WaitForInit) {
+            // 一番最初のinitのみ
             app_state = InitState::FirstSetup;
         } else {
-            // 一番最初のinitのみ
             app_state = InitState::ZeroPointInitializing;
         }
     }
@@ -245,8 +244,10 @@ void loop()
             target_erpm       = 0.0f;
             total_encoder_rad = 0.0f;
             app_state         = InitState::GetRotationRad;
+            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             target_erpm = TARGET_ERPM_INIT;
+            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
         }
     }
 
@@ -257,10 +258,12 @@ void loop()
                 rotation_rad      = total_encoder_rad;  // 一周分のradを記録
                 target_erpm       = 0.0f;
                 total_encoder_rad = 0.0f;
-                app_state         = InitState::InitializingPosition;
+                HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+                app_state = InitState::InitializingPosition;
             }
         } else {
             target_erpm = TARGET_ERPM_INIT;
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
         }
     }
 
@@ -279,28 +282,28 @@ void loop()
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
             app_state         = InitState::Ready;
             total_encoder_rad = 0.0f;
             target_erpm       = 0.0f;
             launcher.send_initial_point(total_encoder_rad);
             get_fire_command = false;
-            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
-            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
             target_erpm = TARGET_ERPM_INIT;
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
         }
     }
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        float check       = rotation_rad * (process_count - 1.0f);
-        float release_rad = rotate_to_rad(INITIAL_POINT_ROTATIONS) + check;
+        float check       = rotation_rad * (process_count - 1.0f);  // debug用途
+        float release_rad = rotate_to_rad(RELEASE_POINT_ROTATIONS) + check;
         if (total_encoder_rad > release_rad) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
-            app_state = InitState::GoToInitPoint;
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
+            app_state = InitState::GoToInitPoint;
         }
         HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
     }
@@ -310,9 +313,10 @@ void loop()
             target_erpm = 0.0f;
             launcher.send_initial_point(total_encoder_rad);
             get_fire_command = false;
-            app_state        = InitState::Ready;
-            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+            app_state = InitState::Ready;
         } else {
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
             target_erpm = send_init_erpm(1, 0.01f);
         }
     }

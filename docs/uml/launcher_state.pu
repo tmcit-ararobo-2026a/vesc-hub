@@ -1,0 +1,57 @@
+@startuml launcher_state
+!theme plain
+skinparam backgroundColor #ffffff
+
+title Launcher application state transition
+
+[*] --> WaitForInit : setup()
+
+state "WaitForInit\n初期化待ち" as WaitForInit
+state "FirstSetup\n初回ホール検出" as FirstSetup
+state "GetRotationRad\n回転量の計測" as GetRotationRad
+state "ZeroPointInitializing\n再初期化・原点検出" as ZeroPointInitializing
+state "InitializingPosition\n初期位置へ移動" as InitializingPosition
+state "Ready\n射出待ち" as Ready
+state "GoToInitPoint\n原点へ復帰" as GoToInitPoint
+
+WaitForInit --> FirstSetup : init受信（初回）
+WaitForInit --> ZeroPointInitializing : init受信（再初期化）
+
+FirstSetup --> FirstSetup : 磁石未検出 / 初期速度で回転
+FirstSetup --> GetRotationRad : 磁石検出 / エンコーダをリセット
+FirstSetup --> ZeroPointInitializing : init受信
+
+GetRotationRad --> GetRotationRad : 規定回転量未到達\nまたは磁石未検出
+GetRotationRad --> InitializingPosition : 規定回転量到達かつ磁石検出\n1回転量を記録してリセット
+GetRotationRad --> ZeroPointInitializing : init受信
+
+ZeroPointInitializing --> ZeroPointInitializing : 磁石未検出 / 初期速度で回転
+ZeroPointInitializing --> InitializingPosition : 磁石検出 / エンコーダをリセット
+ZeroPointInitializing --> ZeroPointInitializing : init受信 / 射出回数をリセット
+
+InitializingPosition --> InitializingPosition : 初期位置まで未到達 / 初期速度で回転
+InitializingPosition --> Ready : 初期位置に到達 / 停止して初期位置を通知
+InitializingPosition --> ZeroPointInitializing : init受信 / 射出回数をリセット
+
+Ready --> Ready : 射出指令受信 / 目標速度を設定
+Ready --> GoToInitPoint : 射出位置に到達 / 解放位置と速度を通知
+Ready --> ZeroPointInitializing : init受信 / 射出回数をリセット
+
+GoToInitPoint --> GoToInitPoint : 初期位置未到達 / 復帰速度で回転
+GoToInitPoint --> Ready : 初期位置に到達 / 停止して初期位置を通知
+GoToInitPoint --> ZeroPointInitializing : init受信 / 射出回数をリセット
+
+note right of Ready
+  射出指令を受けると射出回数を更新する。
+  射出位置は 9 回転分に射出回数分の
+  回転量を加えて判定する。
+end note
+
+note bottom of GoToInitPoint
+  init受信時は現在状態にかかわらず
+  再初期化状態へ遷移する。
+  100 Hzで目標ERPMを送信し、
+  1 kHzでエンコーダを更新する。
+end note
+
+@enduml

@@ -72,7 +72,7 @@ constexpr uint32_t HEARTBEAT_TOGGLE_INTERVAL_MS = 500;
 uint32_t heartbeat_last_toggle_time_ms          = 0;
 
 // その他動作補助
-float process_count{};
+uint32_t process_count{};
 
 /**  変換関数 **/
 
@@ -153,9 +153,10 @@ float send_init_erpm(float approach_time_s)
     const float pole_pairs = MOTOR_POLES / 2.0f;
 
     // 残り距離 [m](行き過ぎても負にならないようにする)
-    const float remaining_rad = rotate_to_rad(INITIAL_POINT_ROTATIONS) +
-                                rotate_to_rad(NUMBER_OF_ROTATION) * process_count - encoder_rad;
-    const float remaining     = std::max(rad_to_distance(remaining_rad), 0.0f);
+    const float remaining_rad =
+        rotate_to_rad(INITIAL_POINT_ROTATIONS) +
+        rotate_to_rad(NUMBER_OF_ROTATION) * (static_cast<float>(process_count) - encoder_rad);
+    const float remaining = std::max(rad_to_distance(remaining_rad), 0.0f);
 
     // 最小ERPMに相当する速度 [m/s]
     const float v_min = rpm_to_velocity(INIT_RETURN_MIN_ERPM / pole_pairs);
@@ -225,7 +226,7 @@ void loop()
 
     if (launcher.get_init()) {
         app_state     = InitState::ZeroPointInitializing;
-        process_count = 0.0f;
+        process_count = 0;
     }
 
     // ホールセンサーまでのinit処理
@@ -246,7 +247,7 @@ void loop()
         if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
             target_erpm = 0.0f;
             app_state   = InitState::Ready;
-            process_count += 1.0f;
+            process_count++;
             launcher.send_initial_point(encoder_rad);
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
 
@@ -258,7 +259,7 @@ void loop()
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        if (encoder_rad > (rotate_to_rad(NUMBER_OF_ROTATION) * process_count)) {
+        if (encoder_rad > (rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count))) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -271,10 +272,10 @@ void loop()
 
     if (app_state == InitState::GoToInitPoint) {
         if (encoder_rad > (rotate_to_rad(INITIAL_POINT_ROTATIONS) +
-                           rotate_to_rad(NUMBER_OF_ROTATION) * process_count)) {
+                           rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count))) {
             target_erpm = 0.0f;
             app_state   = InitState::Ready;
-            process_count += 1.0f;
+            process_count++;
             launcher.send_initial_point(encoder_rad);
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {

@@ -44,7 +44,6 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 9.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.85f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
@@ -154,7 +153,8 @@ float send_init_erpm(float approach_time_s)
     const float pole_pairs = MOTOR_POLES / 2.0f;
 
     // 残り距離 [m](行き過ぎても負にならないようにする)
-    const float remaining_rad = NUMBER_OF_ROTATION * process_count - encoder_rad;
+    const float remaining_rad = rotate_to_rad(INITIAL_POINT_ROTATIONS) +
+                                rotate_to_rad(NUMBER_OF_ROTATION) * process_count - encoder_rad;
     const float remaining     = std::max(rad_to_distance(remaining_rad), 0.0f);
 
     // 最小ERPMに相当する速度 [m/s]
@@ -232,7 +232,8 @@ void loop()
     if (app_state == InitState::ZeroPointInitializing) {
         if (magnet_near) {
             encoder.reset();
-            app_state = InitState::InitializingPosition;
+            encoder_rad = 0.0f;
+            app_state   = InitState::InitializingPosition;
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
@@ -257,7 +258,7 @@ void loop()
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        if (encoder_rad > (NUMBER_OF_ROTATION * process_count)) {
+        if (encoder_rad > (rotate_to_rad(NUMBER_OF_ROTATION) * process_count)) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -269,7 +270,8 @@ void loop()
     }
 
     if (app_state == InitState::GoToInitPoint) {
-        if (encoder_rad > (INITIAL_POINT_ROTATIONS + NUMBER_OF_ROTATION * process_count)) {
+        if (encoder_rad > (rotate_to_rad(INITIAL_POINT_ROTATIONS) +
+                           rotate_to_rad(NUMBER_OF_ROTATION) * process_count)) {
             target_erpm = 0.0f;
             app_state   = InitState::Ready;
             process_count += 1.0f;

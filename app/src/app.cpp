@@ -46,8 +46,8 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 10.0f;
-constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
+constexpr float RELEASE_POINT_ROTATIONS = 9.0f;
+constexpr float INITIAL_POINT_ROTATIONS = 5.85f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
@@ -61,7 +61,7 @@ float target_erpm{};
 float feedback_rpm{};
 
 // エンコーダー関係
-gn10_motor::IncrementalEncoder encoder(2000, &htim3);
+gn10_motor::IncrementalEncoder encoder(4000, &htim3);
 float encoder_rad{};
 float last_encoder_rad{};
 float total_encoder_rad{};

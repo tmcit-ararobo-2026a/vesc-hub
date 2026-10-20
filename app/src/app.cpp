@@ -54,7 +54,7 @@ constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
 constexpr float INIT_RETURN_MIN_ERPM    = 1000.0f;
-constexpr float INIT_RETURN_MAX_ERPM    = 30000.0f;
+constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 
 // VESC関係
 float target_erpm{};
@@ -309,8 +309,9 @@ void loop()
             launcher.send_velocity_feedback(release_erpm);
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
             app_state = InitState::GoToInitPoint;
+        } else {
+            HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
         }
-        HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
     }
 
     if (app_state == InitState::GoToInitPoint) {

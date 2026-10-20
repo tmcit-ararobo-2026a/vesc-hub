@@ -46,7 +46,7 @@ VescCAN vesc(can2_driver);
 
 // constants
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
-constexpr float RELEASE_POINT_ROTATIONS = 8.0f;
+constexpr float RELEASE_POINT_ROTATIONS = 10.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.6f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
@@ -239,7 +239,8 @@ void loop()
             // 一番最初のinitのみ
             app_state = InitState::FirstSetup;
         } else {
-            app_state = InitState::ZeroPointInitializing;
+            app_state     = InitState::ZeroPointInitializing;
+            process_count = 0.0f;
         }
     }
 
@@ -301,8 +302,13 @@ void loop()
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        float check       = rotation_rad * (process_count - 1.0f);  // debug用途
-        float release_rad = rotate_to_rad(RELEASE_POINT_ROTATIONS) + check;
+        float add_rotation_rad;
+        if (get_fire_command) {
+            add_rotation_rad = abs(rotation_rad * (process_count - 1.0f));
+        } else {
+            add_rotation_rad = abs(rotation_rad * (process_count));
+        }
+        float release_rad = rotate_to_rad(RELEASE_POINT_ROTATIONS) + add_rotation_rad;
         if (total_encoder_rad > release_rad) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;

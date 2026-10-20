@@ -24,8 +24,6 @@ volatile bool timer_100hz_triggered;
 // 状態管理用
 enum class InitState {
     WaitForInit,
-    FirstSetup,
-    GetRotationRad,
     ZeroPointInitializing,
     InitializingPosition,
     Ready,
@@ -235,42 +233,8 @@ void loop()
     }
 
     if (launcher.get_init()) {
-        if (app_state == InitState::WaitForInit) {
-            // 一番最初のinitのみ
-            app_state = InitState::FirstSetup;
-        } else {
-            app_state     = InitState::ZeroPointInitializing;
-            process_count = 0.0f;
-        }
-    }
-
-    if (app_state == InitState::FirstSetup) {
-        // hole sensorまでsetup
-        if (magnet_near) {
-            target_erpm       = 0.0f;
-            total_encoder_rad = 0.0f;
-            app_state         = InitState::GetRotationRad;
-            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
-        } else {
-            target_erpm = TARGET_ERPM_INIT;
-            HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
-        }
-    }
-
-    if (app_state == InitState::GetRotationRad) {
-        // 即時にホールセンサー反応しないように
-        if (total_encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            if (magnet_near) {
-                rotation_rad      = total_encoder_rad;  // 一周分のradを記録
-                target_erpm       = 0.0f;
-                total_encoder_rad = 0.0f;
-                HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
-                app_state = InitState::InitializingPosition;
-            }
-        } else {
-            target_erpm = TARGET_ERPM_INIT;
-            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-        }
+        app_state     = InitState::ZeroPointInitializing;
+        process_count = 0.0f;
     }
 
     // ホールセンサーまでのinit処理

@@ -46,6 +46,7 @@ VescCAN vesc(can2_driver);
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
 constexpr float RELEASE_POINT_ROTATIONS = 9.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.85f;
+constexpr float NUMBER_OF_ROTATION      = 12.0f;
 constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
 constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
@@ -61,7 +62,6 @@ float feedback_rpm{};
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4000, &htim3);
 float encoder_rad{};
-float rotation_rad{};  // 一番最初のinit時のみ記録する一周分のrad
 
 // ホールセンサ
 bool magnet_near                   = false;
@@ -73,7 +73,6 @@ constexpr uint32_t HEARTBEAT_TOGGLE_INTERVAL_MS = 500;
 uint32_t heartbeat_last_toggle_time_ms          = 0;
 
 // その他動作補助
-bool get_fire_command = false;
 float process_count{};
 
 /**  変換関数 **/
@@ -155,7 +154,7 @@ float send_init_erpm(float approach_time_s)
     const float pole_pairs = MOTOR_POLES / 2.0f;
 
     // 残り距離 [m](行き過ぎても負にならないようにする)
-    const float remaining_rad = rotation_rad * process_count - encoder_rad;
+    const float remaining_rad = NUMBER_OF_ROTATION * process_count - encoder_rad;
     const float remaining     = std::max(rad_to_distance(remaining_rad), 0.0f);
 
     // 最小ERPMに相当する速度 [m/s]
@@ -221,10 +220,6 @@ void loop()
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
-        if (!get_fire_command) {
-            get_fire_command = true;
-            process_count += 1.0f;
-        }
         target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
     }
 
@@ -248,12 +243,12 @@ void loop()
     // ホールセンサーから初期位置までのinit処理
     if (app_state == InitState::InitializingPosition) {
         if (encoder_rad > rotate_to_rad(INITIAL_POINT_ROTATIONS)) {
-            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
-            app_state = InitState::Ready;
-            encoder.reset();
             target_erpm = 0.0f;
+            app_state   = InitState::Ready;
+            process_count += 1.0f;
             launcher.send_initial_point(encoder_rad);
-            get_fire_command = false;
+            HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+
         } else {
             target_erpm = TARGET_ERPM_INIT;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
@@ -262,14 +257,7 @@ void loop()
 
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
-        float add_rotation_rad;
-        if (get_fire_command) {
-            add_rotation_rad = abs(rotation_rad * (process_count - 1.0f));
-        } else {
-            add_rotation_rad = abs(rotation_rad * (process_count));
-        }
-        float release_rad = rotate_to_rad(RELEASE_POINT_ROTATIONS) + add_rotation_rad;
-        if (encoder_rad > release_rad) {
+        if (encoder_rad > (NUMBER_OF_ROTATION * process_count)) {
             launcher.send_release_point(feedback_velocity);
             float release_erpm = feedback_rpm;
             launcher.send_velocity_feedback(release_erpm);
@@ -281,12 +269,12 @@ void loop()
     }
 
     if (app_state == InitState::GoToInitPoint) {
-        if (encoder_rad > (rotation_rad * static_cast<float>(process_count))) {
+        if (encoder_rad > (INITIAL_POINT_ROTATIONS + NUMBER_OF_ROTATION * process_count)) {
             target_erpm = 0.0f;
+            app_state   = InitState::Ready;
+            process_count += 1.0f;
             launcher.send_initial_point(encoder_rad);
-            get_fire_command = false;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
-            app_state = InitState::Ready;
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
             target_erpm = send_init_erpm(1);

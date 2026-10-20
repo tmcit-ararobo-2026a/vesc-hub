@@ -53,6 +53,8 @@ constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
+constexpr float INIT_RETURN_MIN_ERPM    = 1000.0f;
+constexpr float INIT_RETURN_MAX_ERPM    = 30000.0f;
 
 // VESC関係
 float target_erpm{};
@@ -149,22 +151,25 @@ void timer_100hz_process()
 /** 他関数 **/
 
 /**
- * @brief 初期動作の目標ERPMを計算する
- * @param target_init_s 目標速度に到達するまでの時間 [s]
- * @param dt 制御周期 [s]
+ * @brief 初期位置へ戻る際の目標ERPMを計算する
+ *        残り距離が大きいほど速く、近づくと最小ERPMに収束する
+ * @param approach_time_s 時定数 [s]。大きいほどゆっくり減速する
  * @return 目標ERPM
  */
-float send_init_erpm(float target_init_s, float dt)
+float send_init_erpm(float approach_time_s)
 {
-    const float init_distance   = rad_to_distance(rotation_rad * process_count - total_encoder_rad);
-    const float target_velocity = init_distance / target_init_s;
-    const float now_velocity    = rpm_to_velocity(feedback_rpm);
-    const float acceleration    = (target_velocity - now_velocity) / target_init_s;
-    const float next_velocity   = now_velocity + acceleration * dt;
-    const float target_rpm      = velocity_to_rpm(next_velocity);
-    const float target_init_erpm = target_rpm * (MOTOR_POLES / 2.0f);
+    const float pole_pairs = MOTOR_POLES / 2.0f;
 
-    return std::clamp(target_init_erpm, 1000.0f, 10000.0f);
+    // 残り距離 [m](行き過ぎても負にならないようにする)
+    const float remaining_rad = rotation_rad * process_count - total_encoder_rad;
+    const float remaining     = std::max(rad_to_distance(remaining_rad), 0.0f);
+
+    // 最小ERPMに相当する速度 [m/s]
+    const float v_min = rpm_to_velocity(INIT_RETURN_MIN_ERPM / pole_pairs);
+
+    const float velocity = v_min + remaining / approach_time_s;
+    const float erpm     = velocity_to_rpm(velocity) * pole_pairs;
+    return std::min(erpm, INIT_RETURN_MAX_ERPM);
 }
 
 /**
@@ -317,7 +322,7 @@ void loop()
             app_state = InitState::Ready;
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-            target_erpm = send_init_erpm(1, 0.01f);
+            target_erpm = send_init_erpm(1);
         }
     }
 

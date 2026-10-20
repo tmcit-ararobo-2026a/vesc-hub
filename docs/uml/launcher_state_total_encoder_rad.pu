@@ -1,0 +1,61 @@
+@startuml launcher_state_total_encoder_rad
+!theme plain
+skinparam backgroundColor #ffffff
+
+title Launcher state transitions
+
+[*] --> WaitForInit : setup()
+
+state "WaitForInit\n初期化待ち" as WaitForInit
+state "FirstSetup\n初回ホール検出" as FirstSetup
+state "GetRotationRad\n1回転量の計測" as GetRotationRad
+state "ZeroPointInitializing\n再初期化・原点検出" as ZeroPointInitializing
+state "InitializingPosition\n初期位置へ移動" as InitializingPosition
+state "Ready\n射出待ち" as Ready
+state "GoToInitPoint\n初期位置へ復帰" as GoToInitPoint
+
+WaitForInit --> FirstSetup : 初回init受信
+
+FirstSetup --> FirstSetup : 磁石未検出\n初期速度で回転
+FirstSetup --> GetRotationRad : 磁石検出\n累積角度をリセット
+
+GetRotationRad --> GetRotationRad : 規定回転量未到達\nまたは磁石未検出
+GetRotationRad --> InitializingPosition : 規定回転量到達かつ磁石検出\n1回転量を記録して累積角度をリセット
+
+ZeroPointInitializing --> ZeroPointInitializing : 磁石未検出\n初期速度で回転
+ZeroPointInitializing --> InitializingPosition : 磁石検出\n累積角度をリセット
+
+InitializingPosition --> InitializingPosition : 初期位置まで未到達\n初期速度で回転
+InitializingPosition --> Ready : 初期位置に到達\n停止して累積角度をリセット
+
+Ready --> Ready : 射出指令受信\n目標速度を設定し射出回数を更新
+Ready --> GoToInitPoint : 射出位置に到達\n解放位置と速度を通知
+
+GoToInitPoint --> GoToInitPoint : 初期位置まで未到達\n復帰速度で回転
+GoToInitPoint --> Ready : 初期位置に到達\n停止して初期位置を通知
+
+FirstSetup --> ZeroPointInitializing : 再init受信\n射出回数をリセット
+GetRotationRad --> ZeroPointInitializing : 再init受信\n射出回数をリセット
+ZeroPointInitializing --> ZeroPointInitializing : init受信\n射出回数をリセット
+InitializingPosition --> ZeroPointInitializing : 再init受信\n射出回数をリセット
+Ready --> ZeroPointInitializing : 再init受信\n射出回数をリセット
+GoToInitPoint --> ZeroPointInitializing : 再init受信\n射出回数をリセット
+
+note right of GetRotationRad
+  初回のみ磁石検出後に1回転分の角度を計測し、
+  rotation_rad に保存する。
+end note
+
+note right of Ready
+  射出位置は累積角度で判定する。
+  しきい値は9回転分に射出回数に応じた
+  rotation_rad を加算した値。
+end note
+
+note bottom of GoToInitPoint
+  復帰先のしきい値は
+  rotation_rad × process_count。
+  累積角度と比較して初期位置への到達を判定する。
+end note
+
+@enduml

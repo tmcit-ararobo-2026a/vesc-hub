@@ -136,7 +136,7 @@ void timer_100hz_process()
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
         // launcher.send_velocity_feedback(feedback_velocity);
-        vesc.comm_can_set_rpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
+        vesc.comm_can_set_erpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
 

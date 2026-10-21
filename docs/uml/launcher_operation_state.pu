@@ -1,0 +1,50 @@
+@startuml launcher_operation_state
+!theme plain
+skinparam backgroundColor #ffffff
+
+title Launcher operation state transitions
+
+[*] --> WaitForInit : setup()
+
+state "WaitForInit\n初期化待ち" as WaitForInit
+state "ZeroPointInitializing\n原点検出" as ZeroPointInitializing
+state "InitializingPosition\n初期位置へ移動" as InitializingPosition
+state "Ready\n射出位置へ移動・射出待ち" as Ready
+state "GoToInitPoint\n次の初期位置へ復帰" as GoToInitPoint
+
+WaitForInit --> WaitForInit : init指令なし
+WaitForInit --> ZeroPointInitializing : init指令受信\nprocess_count = 0
+
+ZeroPointInitializing --> ZeroPointInitializing : 磁石未検出\n初期ERPMで回転
+ZeroPointInitializing --> InitializingPosition : 磁石検出\nエンコーダをリセット
+
+InitializingPosition --> InitializingPosition : encoder_rad ≤ 5.8回転\n初期ERPMで回転
+InitializingPosition --> Ready : encoder_rad > 5.8回転\n停止・process_countを加算\n初期位置を通知
+
+Ready --> Ready : 射出指令受信\n目標ERPMを設定
+Ready --> Ready : encoder_rad ≤ 12回転 × process_count
+Ready --> GoToInitPoint : encoder_rad > 12回転 × process_count\n解放位置と速度を通知
+
+GoToInitPoint --> GoToInitPoint : encoder_rad ≤ 5.8回転 +\n12回転 × process_count\n初期位置への復帰ERPMを設定
+GoToInitPoint --> Ready : encoder_rad > 5.8回転 +\n12回転 × process_count\n停止・process_countを加算\n初期位置を通知
+
+ZeroPointInitializing --> ZeroPointInitializing : init指令再受信\nprocess_count = 0
+InitializingPosition --> ZeroPointInitializing : init指令再受信\nprocess_count = 0
+Ready --> ZeroPointInitializing : init指令再受信\nprocess_count = 0
+GoToInitPoint --> ZeroPointInitializing : init指令再受信\nprocess_count = 0
+
+note right of Ready
+  射出指令は状態を変えず、
+  VESCの目標ERPMを更新する。
+  射出位置のしきい値を超えると
+  GoToInitPointへ遷移する。
+end note
+
+note bottom of ZeroPointInitializing
+  初期化指令は現在の状態にかかわらず
+  原点検出を開始する。
+  100 Hzで目標ERPMを送信し、
+  1 kHzでエンコーダを更新する。
+end note
+
+@enduml

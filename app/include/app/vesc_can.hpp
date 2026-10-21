@@ -5,18 +5,9 @@
 #include "gn10_can/drivers/can_driver_interface.hpp"
 
 typedef enum {
-    CAN_PACKET_SET_DUTY = 0,
-    CAN_PACKET_SET_CURRENT,
-    CAN_PACKET_SET_CURRENT_BRAKE,
-    CAN_PACKET_SET_RPM,
-    CAN_PACKET_SET_POS,
-    CAN_PACKET_STATUS_1        = 9,
-    CAN_PACKET_SET_CURRENT_REL = 10,
-    CAN_PACKET_SET_CURRENT_BRAKE_REL,
-    CAN_PACKET_SET_CURRENT_HANDBRAKE,
-    CAN_PACKET_SET_CURRENT_HANDBRAKE_REL,
-    CAN_PACKET_STATUS_5          = 27,
-    CAN_PACKET_MAKE_ENUM_32_BITS = 0xFFFFFFFF,
+    CAN_PACKET_SET_RPM  = 3,
+    CAN_PACKET_STATUS_1 = 9,
+    CAN_PACKET_STATUS_5 = 27,
 } CAN_PACKET_ID;
 
 class VescCAN
@@ -36,6 +27,9 @@ private:
     VescStatus1 status1_;
     VescStatus5 status5_;
 
+    /**
+     * @details this function is used to send commands to the VESC.
+     */
     void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t* index);
 
     /**

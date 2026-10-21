@@ -1,7 +1,5 @@
 #include "app/app.hpp"
 
-#include "app/target_erpm.hpp"
-
 /* app */
 #include "app/incremental_encoder.hpp"
 #include "app/vesc_can.hpp"

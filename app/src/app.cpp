@@ -227,7 +227,7 @@ void loop()
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
     if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
-        target_erpm = target_erpm_field::velocity_to_erpm(target_vel_from_mainboard);
+        target_erpm = target_vel_from_mainboard;
     }
 
     if (launcher.get_init()) {

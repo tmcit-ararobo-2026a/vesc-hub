@@ -155,7 +155,7 @@ float send_init_erpm(float approach_time_s)
     // 残り距離 [m](行き過ぎても負にならないようにする)
     const float remaining_rad =
         rotate_to_rad(INITIAL_POINT_ROTATIONS) +
-        rotate_to_rad(NUMBER_OF_ROTATION) * (static_cast<float>(process_count) - encoder_rad);
+        rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count) - encoder_rad;
     const float remaining = std::max(rad_to_distance(remaining_rad), 0.0f);
 
     // 最小ERPMに相当する速度 [m/s]

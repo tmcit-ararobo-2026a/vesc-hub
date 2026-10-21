@@ -56,7 +56,11 @@ constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 
 // VESC関係
 float target_erpm{};
+
+// フィードバック
 float feedback_rpm{};
+float feedback_voltage{};
+float feedback_current{};
 
 // エンコーダー関係
 gn10_motor::IncrementalEncoder encoder(4000, &htim3);
@@ -202,7 +206,9 @@ void loop()
     // vesc受信処理
     for (int i = 0; i < 8 && HAL_FDCAN_GetRxFifoFillLevel(&hfdcan2, FDCAN_RX_FIFO1) > 0; i++) {
         vesc.update();
-        feedback_rpm = vesc.get_rpm();
+        feedback_rpm     = vesc.get_rpm();
+        feedback_current = vesc.get_current();
+        feedback_voltage = vesc.get_voltage();
     }
 
     // ホールセンサーの設定

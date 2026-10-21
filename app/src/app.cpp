@@ -139,7 +139,7 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        // launcher.send_velocity_feedback(feedback_velocity);
+        launcher.send_feedbacks(rpm_to_velocity(feedback_rpm), feedback_current, feedback_voltage);
         vesc.comm_can_set_erpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -267,8 +267,6 @@ void loop()
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (encoder_rad > (rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count))) {
             launcher.send_release_point(feedback_velocity);
-            float release_erpm = feedback_rpm;
-            launcher.send_velocity_feedback(release_erpm);
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
             app_state = InitState::GoToInitPoint;
         } else {

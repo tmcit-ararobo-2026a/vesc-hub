@@ -20,7 +20,7 @@ void VescCAN::update()
 
 void VescCAN::parse_status1(uint8_t* data, VescStatus1& status)
 {
-    status.rpm     = (int32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
+    status.erpm    = (int32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
     status.current = (int16_t)((data[4] << 8) | data[5]) / 10.0f;
     status.duty    = (int16_t)((data[6] << 8) | data[7]) / 1000.0f;
 }

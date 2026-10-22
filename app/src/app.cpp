@@ -56,7 +56,7 @@ constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 float target_erpm{};
 
 // フィードバック
-float feedback_rpm{};
+float feedback_erpm{};
 float feedback_voltage{};
 float feedback_current{};
 
@@ -137,7 +137,7 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        launcher.send_feedbacks(rpm_to_velocity(feedback_rpm), feedback_current, feedback_voltage);
+        launcher.send_feedbacks(rpm_to_velocity(feedback_erpm), feedback_current, feedback_voltage);
         vesc.comm_can_set_erpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -204,7 +204,7 @@ void loop()
     // vesc受信処理
     for (int i = 0; i < 8 && HAL_FDCAN_GetRxFifoFillLevel(&hfdcan2, FDCAN_RX_FIFO1) > 0; i++) {
         vesc.update();
-        feedback_rpm     = vesc.get_rpm();
+        feedback_erpm    = vesc.get_erpm();
         feedback_current = vesc.get_current();
         feedback_voltage = vesc.get_voltage();
     }

@@ -14,7 +14,7 @@ class VescCAN
 {
 private:
     struct VescStatus1 {
-        int32_t rpm;    // [rpm]
+        int32_t erpm;   // [rpm]
         float current;  //[A]
         float duty;     //[%]
     };
@@ -55,9 +55,9 @@ public:
     void comm_can_set_erpm(uint8_t controller_id, float erpm);
 
     /** vesc feedback get function**/
-    int32_t get_rpm() const
+    int32_t get_erpm() const
     {
-        return -(status1_.rpm / 7);
+        return -(status1_.erpm / 7);
     }
 
     float get_current() const

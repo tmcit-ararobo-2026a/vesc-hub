@@ -1,5 +1,7 @@
 #include "app/app.hpp"
 
+#include <algorithm>
+
 /* app */
 #include "app/incremental_encoder.hpp"
 #include "app/vesc_can.hpp"
@@ -33,9 +35,9 @@ gn10_can::drivers::FDCANDriver fdcan1_driver(&hfdcan1);
 gn10_can::FDCANBus fdcan1_bus(fdcan1_driver);
 gn10_can::devices::LauncherServer launcher(fdcan1_bus, 0);
 
-float target_vel_from_mainboard{};
+float target_erpm_from_mainboard{};
 float feedback_angular_velocity{};
-float feedback_velocity{};
+
 // VESCとのCAN通信
 gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
 VescCAN vesc(can2_driver);
@@ -44,8 +46,6 @@ VescCAN vesc(can2_driver);
 constexpr float TARGET_ERPM_INIT        = 2500.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
-constexpr float BELT_PITCH              = 0.005f;  // 5 mm -> m
-constexpr float PULLEY_TEETH            = 24.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
@@ -86,42 +86,6 @@ float rotate_to_rad(float rotate)
     return rotate * M_PI * 2;
 }
 
-/**
- * @brief 速度からrpmに変換
- */
-float velocity_to_rpm(float velocity)
-{
-    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
-    return (velocity / distance_per_rotation) * 60.0f;
-}
-
-/**
- * @brief 角速度から速度に変換
- */
-float angular_velocity_to_velocity(float angular_velocity)
-{
-    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
-    return angular_velocity * distance_per_rotation / (2.0f * M_PI);
-}
-
-/**
- * @brief RPMから速度に変換
- */
-float rpm_to_velocity(float rpm)
-{
-    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
-    return (rpm / 60.0f) * distance_per_rotation;
-}
-
-/**
- * @brief radから距離に変換
- */
-float rad_to_distance(float rad)
-{
-    const float distance_per_rotation = BELT_PITCH * PULLEY_TEETH;
-    return rad / (2.0f * M_PI) * distance_per_rotation;
-}
-
 /** コールバック関数 **/
 
 void timer_1khz_process()
@@ -129,15 +93,14 @@ void timer_1khz_process()
     int16_t encoder_count = encoder.read_and_reset_count();
     feedback_angular_velocity =
         encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
-    feedback_velocity = angular_velocity_to_velocity(feedback_angular_velocity);
-    encoder_rad       = encoder.accumulate_angle_rad(encoder_count);
+    encoder_rad = encoder.accumulate_angle_rad(encoder_count);
 }
 
 void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        launcher.send_feedbacks(rpm_to_velocity(feedback_erpm), feedback_current, feedback_voltage);
+        launcher.send_feedbacks(feedback_erpm, feedback_current, feedback_voltage);
         vesc.comm_can_set_erpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -146,7 +109,7 @@ void timer_100hz_process()
 
 /**
  * @brief 初期位置へ戻る際の目標ERPMを計算する
- *        残り距離が大きいほど速く、近づくと最小ERPMに収束する
+ *        残り回転数が大きいほど速く、近づくと最小ERPMに収束する
  * @param approach_time_s 時定数 [s]。大きいほどゆっくり減速する
  * @return 目標ERPM
  */
@@ -154,17 +117,16 @@ float send_init_erpm(float approach_time_s)
 {
     const float pole_pairs = MOTOR_POLES / 2.0f;
 
-    // 残り距離 [m](行き過ぎても負にならないようにする)
-    const float remaining_rad =
-        rotate_to_rad(INITIAL_POINT_ROTATIONS) +
-        rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count) - encoder_rad;
-    const float remaining = std::max(rad_to_distance(remaining_rad), 0.0f);
+    // 残り回転数 [rev](行き過ぎても負にならないようにする)
+    const float remaining_rotations = std::max<float>(
+        INITIAL_POINT_ROTATIONS + NUMBER_OF_ROTATION * static_cast<float>(process_count) -
+            encoder_rad / (2.0f * M_PI),
+        0.0f
+    );
+    // 残りを approach_time_s で走り切る回転速度 [rpm] -> ERPM
+    const float approach_rpm = remaining_rotations / approach_time_s * 60.0f;
+    const float erpm         = INIT_RETURN_MIN_ERPM + approach_rpm * pole_pairs;
 
-    // 最小ERPMに相当する速度 [m/s]
-    const float v_min = rpm_to_velocity(INIT_RETURN_MIN_ERPM / pole_pairs);
-
-    const float velocity = v_min + remaining / approach_time_s;
-    const float erpm     = velocity_to_rpm(velocity) * pole_pairs;
     return std::min(erpm, INIT_RETURN_MAX_ERPM);
 }
 
@@ -224,8 +186,8 @@ void loop()
     }
 
     // 司令を受信　＆　射出OKな場合のみtarget_rpmに目標値を代入。それ以外は0
-    if (app_state == InitState::Ready && launcher.get_fire_command(target_vel_from_mainboard)) {
-        target_erpm = target_vel_from_mainboard;
+    if (app_state == InitState::Ready && launcher.get_fire_command(target_erpm_from_mainboard)) {
+        target_erpm = target_erpm_from_mainboard;
     }
 
     if (launcher.get_init()) {
@@ -264,7 +226,7 @@ void loop()
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (encoder_rad > (rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count))) {
-            launcher.send_release_point(feedback_velocity);
+            launcher.send_release_point(feedback_erpm);
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
             app_state = InitState::GoToInitPoint;
         } else {

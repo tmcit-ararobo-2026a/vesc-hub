@@ -44,7 +44,7 @@ void VescCAN::comm_can_set_erpm(uint8_t controller_id, float rpm)
     int32_t data_length_code = 0;
     gn10_can::CANFrame frame;
     buffer_append_int32(frame.data.data(), (int32_t)rpm, &data_length_code);
-    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_RPM << 8);
+    frame.id = controller_id | ((uint32_t)CAN_PACKET_SET_ERPM << 8);
     frame.set_data_length(data_length_code);
     frame.is_extended = true;
     can_driver_.send(frame);

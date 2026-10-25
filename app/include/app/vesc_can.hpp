@@ -5,7 +5,7 @@
 #include "gn10_can/drivers/can_driver_interface.hpp"
 
 typedef enum {
-    CAN_PACKET_SET_RPM  = 3,
+    CAN_PACKET_SET_ERPM = 3,
     CAN_PACKET_STATUS_1 = 9,
     CAN_PACKET_STATUS_5 = 27,
 } CAN_PACKET_ID;
@@ -57,7 +57,7 @@ public:
     /** vesc feedback get function**/
     int32_t get_erpm() const
     {
-        return -(status1_.erpm / 7);
+        return status1_.erpm;
     }
 
     float get_current() const

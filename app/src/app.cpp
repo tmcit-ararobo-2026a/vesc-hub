@@ -43,20 +43,20 @@ gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
 VescCAN vesc(can2_driver);
 
 // constants
-constexpr float TARGET_ERPM_INIT        = 2500.0f;
+constexpr float TARGET_ERPM_INIT        = 2000.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
-constexpr float INIT_RETURN_MIN_ERPM    = 1000.0f;
+constexpr float INIT_RETURN_MIN_ERPM    = 1500.0f;
 constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 
 // VESC関係
 float target_erpm{};
 
 // フィードバック
-float feedback_erpm{};
+int32_t feedback_erpm{};
 float feedback_voltage{};
 float feedback_current{};
 
@@ -100,7 +100,9 @@ void timer_100hz_process()
 {
     // init処理が終わったら送信
     if (app_state != InitState::WaitForInit) {
-        launcher.send_feedbacks(feedback_erpm, feedback_current, feedback_voltage);
+        launcher.send_feedbacks(
+            static_cast<float>(feedback_erpm), feedback_current, feedback_voltage
+        );
         vesc.comm_can_set_erpm(VESC_ID, target_erpm * ROTATION_DIRECTION);
     }
 }
@@ -244,7 +246,7 @@ void loop()
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-            target_erpm = send_init_erpm(1);
+            target_erpm = send_init_erpm(0.8f);
         }
     }
 

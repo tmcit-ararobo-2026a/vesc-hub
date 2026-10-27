@@ -49,30 +49,18 @@ constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
 constexpr float MOTOR_POLES             = 14.0f;
 constexpr float POLE_PAIRS              = MOTOR_POLES / 2.0f;
-constexpr float TWO_PI_F                = 2.0f * 3.14159265358979f;
 constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
 constexpr float INIT_RETURN_MIN_ERPM    = 1500.0f;
 constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 constexpr float CONTROL_PERIOD_S        = 0.01f;  // timer_100hz の周期 [s]
-
-constexpr float RAMP_MAX_PER_S = 190000.0f;
-
-// 加速レートの倍率。1.0 = リリース位置でちょうど目標に到達 / 大きいほど早く目標に達して保持する
-// (低い目標ERPMでは RAMP_MAX_PER_S ではなくこの値が効く。目安 1.0 ~ 3.0)
-constexpr float RAMP_GAIN = 2.5f;
-
-constexpr bool USE_SMOOTH_RETURN       = true;
-constexpr float RETURN_APPROACH_TIME_S = 0.8f;  // 従来方式用
-constexpr float RETURN_STOP_MARGIN_REV = 1.0f;
+constexpr float RAMP_GAIN               = 0.7f;
+constexpr float RAMP_MAX_PER_S          = 1000000.0f;
+constexpr float RETURN_APPROACH_TIME_S  = 1.0f;
 
 // VESC関係
-float target_erpm{};  // 最終目標 [erpm] (正の値。向きは送信時に反転)
-float cmd_erpm{};     // VESCへ実際に送る値 [erpm]
-
-// リリース時の記録 (戻り動作の目標計算用)
-float release_erpm{};           // リリース時の速度 [erpm]
-float release_remaining_rev{};  // リリース時の初期位置までの残り回転数 [rev]
+float target_erpm{};    // 最終目標 [erpm] (正の値。向きは送信時に反転)
+float revision_erpm{};  // VESCへ実際に送る値 [erpm]
 
 // フィードバック
 int32_t feedback_erpm{};
@@ -106,43 +94,54 @@ float rotate_to_rad(float rotate)
 }
 
 /**
+ * @brief radから回転数に変換
+ */
+float rad_to_rotate(float rad)
+{
+    return rad / (M_PI * 2);
+}
+
+/**
  * @brief エンコーダ速度から求めた現在のERPM (絶対値)
  */
 float encoder_erpm()
 {
-    return std::fabs(feedback_angular_velocity) / TWO_PI_F * 60.0f * POLE_PAIRS;
+    float rpm = std::fabs(feedback_angular_velocity) / (M_PI * 2) * 60.0f;
+    return rpm * POLE_PAIRS;  // erpm
 }
 
 /**
- * @brief リリース位置までの残り回転数 [rev]
+ * @brief リリース位置までの残り角度 [rad]
+ * @param release_point リリース位置 [rev]
  */
-float remaining_rev_to_release()
+float remaining_rad_to_release(float release_point)
 {
-    return NUMBER_OF_ROTATION * static_cast<float>(process_count) - encoder_rad / TWO_PI_F;
+    return rotate_to_rad(release_point * static_cast<float>(process_count)) - encoder_rad;
 }
 
 /**
- * @brief 初期位置までの残り回転数 [rev] (行き過ぎても負にならない)
+ * @brief 初期位置までの残り角度 [rad] (行き過ぎても負にならない)
  */
-float remaining_rev_to_init()
+float remaining_rad_to_init()
 {
     return std::max<float>(
-        INITIAL_POINT_ROTATIONS + NUMBER_OF_ROTATION * static_cast<float>(process_count) -
-            encoder_rad / TWO_PI_F,
+        rotate_to_rad(INITIAL_POINT_ROTATIONS) +
+            rotate_to_rad(NUMBER_OF_ROTATION * static_cast<float>(process_count)) - encoder_rad,
         0.0f
     );
 }
 
 /**
- * @brief 残り距離 remaining_rev [rev] の間に now_erpm から target_erpm へ到達するための加速レート
- * [erpm/s] R = RAMP_GAIN * (E_target^2 - E_now^2) / (2 * 60 * 極対数 * 残り回転数)
+ * @brief 残り距離 remaining_rad [rad] の間に now_erpm から target へ到達するための加速レート
+ * [erpm/s] R = RAMP_GAIN * (E_target^2 - E_now^2) / (2 * 60 * 極対数 * 残り回転数[rev]) ※
+ * 式は回転数[rev]基準なので、rad を rev に直してから使う
  */
-float ramp_up_rate_dynamic(float target, float now_erpm, float remaining_rev)
+float ramp_up_rate_dynamic(float target, float now_erpm, float remaining_rad)
 {
     if (now_erpm >= target) return 0.0f;
-    remaining_rev    = std::max(remaining_rev, 0.05f);  // 0割りと発散を防ぐ
-    const float rate = RAMP_GAIN * (target * target - now_erpm * now_erpm) /
-                       (2.0f * 60.0f * POLE_PAIRS * remaining_rev);
+    const float remaining_rev = std::max(rad_to_rotate(remaining_rad), 0.05f);  // 0割り・発散防止
+    const float rate          = RAMP_GAIN * (target * target - now_erpm * now_erpm) /
+                                (2.0f * 60.0f * POLE_PAIRS * remaining_rev);
     return std::min(rate, RAMP_MAX_PER_S);
 }
 
@@ -151,33 +150,18 @@ float ramp_up_rate_dynamic(float target, float now_erpm, float remaining_rev)
  * @param use_dynamic true = 残り距離から加速レートを計算 / false = 上限レート
  */
 float update_cmd_erpm(
-    float cmd, float target, float now_erpm, float remaining_rev, bool use_dynamic
+    float current_cmd, float target, float now_erpm, float remaining_rad, bool use_dynamic
 )
 {
+    float rate{};
     if (now_erpm >= target) return target;
-    const float rate =
-        use_dynamic ? ramp_up_rate_dynamic(target, now_erpm, remaining_rev) : RAMP_MAX_PER_S;
-    return std::min(cmd + rate * CONTROL_PERIOD_S, target);
-}
 
-/**
- * @brief 戻り動作の目標ERPM
- *        リリース時の速度から始まり、初期位置の RETURN_STOP_MARGIN_REV 手前で
- *        INIT_RETURN_MIN_ERPM になる一定減速のプロファイル
- *        v(r) = sqrt(vm^2 + (v0^2 - vm^2) * (r - m) / (r0 - m))
- *        (速度ループの追従遅れ分を、手前で減速を終えることで吸収する)
- */
-float return_erpm()
-{
-    const float v0     = release_erpm;
-    const float vm     = INIT_RETURN_MIN_ERPM;
-    const float usable = release_remaining_rev - RETURN_STOP_MARGIN_REV;
-    if (v0 <= vm || usable <= 0.0f) {
-        return vm;  // 元々遅い場合も最低速度では戻る
+    if (use_dynamic) {
+        rate = ramp_up_rate_dynamic(target, now_erpm, remaining_rad);
+    } else {
+        rate = RAMP_MAX_PER_S;  // 最高加速度
     }
-    const float x =
-        std::min(std::max((remaining_rev_to_init() - RETURN_STOP_MARGIN_REV) / usable, 0.0f), 1.0f);
-    return std::sqrt(vm * vm + (v0 * v0 - vm * vm) * x);
+    return std::min(current_cmd + rate * CONTROL_PERIOD_S, target);
 }
 
 /** コールバック関数 **/
@@ -198,15 +182,15 @@ void timer_100hz_process()
         );
 
         // 射出(Ready)中だけ、リリース位置までの残り距離から加速レートを動的に決める
-        cmd_erpm = update_cmd_erpm(
-            cmd_erpm,
+        revision_erpm = update_cmd_erpm(
+            revision_erpm,
             target_erpm,
             encoder_erpm(),
-            remaining_rev_to_release(),
+            remaining_rad_to_release(NUMBER_OF_ROTATION),
             app_state == InitState::Ready
         );
 
-        vesc.comm_can_set_erpm(VESC_ID, cmd_erpm * ROTATION_DIRECTION);
+        vesc.comm_can_set_erpm(VESC_ID, revision_erpm * ROTATION_DIRECTION);
     }
 }
 
@@ -220,9 +204,10 @@ void timer_100hz_process()
  */
 float send_init_erpm(float approach_time_s)
 {
-    // 残りを approach_time_s で走り切る回転速度 [rpm] -> ERPM
-    const float approach_rpm = remaining_rev_to_init() / approach_time_s * 60.0f;
-    const float erpm         = INIT_RETURN_MIN_ERPM + approach_rpm * POLE_PAIRS;
+    // 残り回転数 [rev] を approach_time_s で走り切る回転速度 [rpm] -> ERPM
+    const float remaining_rev = rad_to_rotate(remaining_rad_to_init());
+    const float approach_rpm  = remaining_rev / approach_time_s * 60.0f;
+    const float erpm          = INIT_RETURN_MIN_ERPM + approach_rpm * POLE_PAIRS;
 
     return std::min(erpm, INIT_RETURN_MAX_ERPM);
 }
@@ -323,10 +308,6 @@ void loop()
     if (app_state == InitState::Ready) {
         // しきい値を超えたらモーターを止めて、終速を送る処理
         if (encoder_rad > (rotate_to_rad(NUMBER_OF_ROTATION) * static_cast<float>(process_count))) {
-            // 戻り動作の目標をリリース時の速度から連続につなぐため記録する
-            release_erpm          = std::min(cmd_erpm, encoder_erpm());
-            release_remaining_rev = remaining_rev_to_init();
-
             launcher.send_release_point(feedback_erpm);
             HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
             app_state = InitState::GoToInitPoint;
@@ -345,8 +326,7 @@ void loop()
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
-            target_erpm =
-                USE_SMOOTH_RETURN ? return_erpm() : send_init_erpm(RETURN_APPROACH_TIME_S);
+            target_erpm = send_init_erpm(RETURN_APPROACH_TIME_S);
         }
     }
 

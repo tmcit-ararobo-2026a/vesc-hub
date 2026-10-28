@@ -248,7 +248,8 @@ void loop()
     // vesc受信処理
     for (int i = 0; i < 8 && HAL_FDCAN_GetRxFifoFillLevel(&hfdcan2, FDCAN_RX_FIFO1) > 0; i++) {
         vesc.update();
-        feedback_erpm    = vesc.get_erpm();
+        float raw_erpm   = static_cast<float>(vesc.get_erpm());
+        feedback_erpm    = -raw_erpm;
         feedback_current = vesc.get_current();
         feedback_voltage = vesc.get_voltage();
     }

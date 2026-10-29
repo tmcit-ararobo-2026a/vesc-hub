@@ -44,19 +44,20 @@ gn10_can::drivers::CANDriver can2_driver(&hfdcan2, FDCAN_RX_FIFO1, true);
 VescCAN vesc(can2_driver);
 
 // constants
+constexpr float MOTOR_POLES             = 14.0f;
+constexpr float POLE_PAIRS              = MOTOR_POLES / 2.0f;
+constexpr float INIT_RETURN_MIN_ERPM    = 1500.0f;
+constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 constexpr float TARGET_ERPM_INIT        = 2000.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
-constexpr float MOTOR_POLES             = 14.0f;
-constexpr float POLE_PAIRS              = MOTOR_POLES / 2.0f;
-constexpr float ENCODER_SAMPLE_PERIOD   = 0.001f;  // [s]
 constexpr float ROTATION_DIRECTION      = -1.0f;
-constexpr float INIT_RETURN_MIN_ERPM    = 1500.0f;
-constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
-constexpr float CONTROL_PERIOD_S        = 0.01f;  // timer_100hz の周期 [s]
-constexpr float RAMP_GAIN               = 0.7f;
+constexpr float ENCODER_SAMPLE_PERIOD_S = 0.001f;   // [s]
+constexpr float ZERO_POINT_ACCEL_PER_S  = 4000.0f;  // ZeroPoint時の加速度 [erpm/s]
 constexpr float RAMP_MAX_PER_S          = 1000000.0f;
 constexpr float RETURN_APPROACH_TIME_S  = 1.0f;
+constexpr float CONTROL_PERIOD_S        = 0.01f;  // timer_100hz の周期 [s]
+constexpr float RAMP_GAIN               = 0.7f;
 
 // VESC関係
 float target_erpm{};    // 最終目標 [erpm] (正の値。向きは送信時に反転)
@@ -164,36 +165,6 @@ float update_cmd_erpm(
     return std::min(current_cmd + rate * CONTROL_PERIOD_S, target);
 }
 
-/** コールバック関数 **/
-
-void timer_1khz_process()
-{
-    int16_t encoder_count = encoder.read_and_reset_count();
-    feedback_angular_velocity =
-        encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD);
-    encoder_rad = encoder.accumulate_angle_rad(encoder_count);
-}
-
-void timer_100hz_process()
-{
-    if (app_state != InitState::WaitForInit) {
-        launcher.send_feedbacks(
-            static_cast<float>(feedback_erpm), feedback_current, feedback_voltage
-        );
-
-        // 射出(Ready)中だけ、リリース位置までの残り距離から加速レートを動的に決める
-        revision_erpm = update_cmd_erpm(
-            revision_erpm,
-            target_erpm,
-            encoder_erpm(),
-            remaining_rad_to_release(NUMBER_OF_ROTATION),
-            app_state == InitState::Ready
-        );
-
-        vesc.comm_can_set_erpm(VESC_ID, revision_erpm * ROTATION_DIRECTION);
-    }
-}
-
 /** 他関数 **/
 
 /**
@@ -213,6 +184,22 @@ float send_init_erpm(float approach_time_s)
 }
 
 /**
+ * @brief ZeroPoint探索用の台形制御(加速 → 一定速度)
+ * @param current_cmd 現在の指令ERPM
+ * @param target      巡航ERPM
+ * @return 次の指令ERPM
+ */
+float trapezoid_erpm(float current_cmd, float target)
+{
+    const float step = ZERO_POINT_ACCEL_PER_S * CONTROL_PERIOD_S;
+
+    if (current_cmd < target) {
+        return std::min(current_cmd + step, target);
+    }
+    return target;
+}
+
+/**
  * @brief Toggle heartbeat LED
  */
 void update_heartbeat_led()
@@ -221,6 +208,40 @@ void update_heartbeat_led()
     if ((now_ms - heartbeat_last_toggle_time_ms) >= HEARTBEAT_TOGGLE_INTERVAL_MS) {
         heartbeat_last_toggle_time_ms = now_ms;
         HAL_GPIO_TogglePin(LED_4_GPIO_Port, LED_4_Pin);
+    }
+}
+
+/** コールバック関数 **/
+
+void timer_1khz_process()
+{
+    int16_t encoder_count = encoder.read_and_reset_count();
+    feedback_angular_velocity =
+        encoder.count_to_angular_velocity(encoder_count, ENCODER_SAMPLE_PERIOD_S);
+    encoder_rad = encoder.accumulate_angle_rad(encoder_count);
+}
+
+void timer_100hz_process()
+{
+    if (app_state != InitState::WaitForInit) {
+        launcher.send_feedbacks(
+            static_cast<float>(feedback_erpm), feedback_current, feedback_voltage
+        );
+
+        // 射出(Ready)中だけ、リリース位置までの残り距離から加速レートを動的に決める
+        if (app_state == InitState::ZeroPointInitializing) {
+            revision_erpm = trapezoid_erpm(revision_erpm, target_erpm);
+        } else {
+            revision_erpm = update_cmd_erpm(
+                revision_erpm,
+                target_erpm,
+                encoder_erpm(),
+                remaining_rad_to_release(NUMBER_OF_ROTATION),
+                app_state == InitState::Ready
+            );
+        }
+
+        vesc.comm_can_set_erpm(VESC_ID, revision_erpm * ROTATION_DIRECTION);
     }
 }
 

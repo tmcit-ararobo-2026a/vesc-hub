@@ -246,7 +246,7 @@ void timer_100hz_process()
         vesc.comm_can_set_erpm(VESC_ID, accelerating_erpm * ROTATION_DIRECTION);
 
         launcher.send_feedbacks(
-            static_cast<float>(feedback_erpm), accelerating_erpm, feedback_current, feedback_voltage
+            accelerating_erpm, static_cast<float>(feedback_erpm), feedback_voltage, feedback_current
         );
     }
 }

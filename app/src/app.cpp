@@ -224,10 +224,6 @@ void timer_1khz_process()
 void timer_100hz_process()
 {
     if (app_state != InitState::WaitForInit) {
-        launcher.send_feedbacks(
-            static_cast<float>(feedback_erpm), feedback_current, feedback_voltage
-        );
-
         // 射出(Ready)中だけ、リリース位置までの残り距離から加速レートを動的に決める
         if (app_state == InitState::ZeroPointInitializing) {
             revision_erpm = trapezoid_erpm(revision_erpm, target_erpm);
@@ -240,8 +236,11 @@ void timer_100hz_process()
                 app_state == InitState::Ready
             );
         }
-
         vesc.comm_can_set_erpm(VESC_ID, revision_erpm * ROTATION_DIRECTION);
+
+        launcher.send_feedbacks(
+            static_cast<float>(feedback_erpm), revision_erpm, feedback_current, feedback_voltage
+        );
     }
 }
 

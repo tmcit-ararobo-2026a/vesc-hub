@@ -50,6 +50,7 @@ constexpr float INIT_RETURN_MIN_ERPM    = 1500.0f;
 constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 constexpr float TARGET_ERPM_INIT        = 2000.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
+constexpr float RELEACE_ROTATION        = 9.5f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
 constexpr float ROTATION_DIRECTION      = -1.0f;
 constexpr float ENCODER_SAMPLE_PERIOD_S = 0.001f;   // [s]
@@ -57,11 +58,10 @@ constexpr float ZERO_POINT_ACCEL_PER_S  = 4000.0f;  // ZeroPoint時の加速度 
 constexpr float RAMP_MAX_PER_S          = 1000000.0f;
 constexpr float RETURN_APPROACH_TIME_S  = 1.0f;
 constexpr float CONTROL_PERIOD_S        = 0.01f;  // timer_100hz の周期 [s]
-constexpr float RAMP_GAIN               = 0.7f;
 
 // VESC関係
-float target_erpm{};    // 最終目標 [erpm] (正の値。向きは送信時に反転)
-float revision_erpm{};  // VESCへ実際に送る値 [erpm]
+float target_erpm{};        // 最終目標 [erpm] (正の値。向きは送信時に反転)
+float accelerating_erpm{};  // VESCへ実際に送る値 [erpm]
 
 // フィードバック
 int32_t feedback_erpm{};
@@ -117,7 +117,10 @@ float encoder_erpm()
  */
 float remaining_rad_to_release(float release_point)
 {
-    return rotate_to_rad(release_point * static_cast<float>(process_count)) - encoder_rad;
+    const float target_rev =
+        NUMBER_OF_ROTATION * static_cast<float>(process_count) -
+        (NUMBER_OF_ROTATION - release_point);  // count=1 なら 11, count=2 なら 23
+    return rotate_to_rad(target_rev) - encoder_rad;
 }
 
 /**
@@ -141,8 +144,8 @@ float ramp_up_rate_dynamic(float target, float now_erpm, float remaining_rad)
 {
     if (now_erpm >= target) return 0.0f;
     const float remaining_rev = std::max(rad_to_rotate(remaining_rad), 0.05f);  // 0割り・発散防止
-    const float rate          = RAMP_GAIN * (target * target - now_erpm * now_erpm) /
-                                (2.0f * 60.0f * POLE_PAIRS * remaining_rev);
+    const float rate =
+        (target * target - now_erpm * now_erpm) / (2.0f * 60.0f * POLE_PAIRS * remaining_rev);
     return std::min(rate, RAMP_MAX_PER_S);
 }
 
@@ -224,24 +227,23 @@ void timer_1khz_process()
 void timer_100hz_process()
 {
     if (app_state != InitState::WaitForInit) {
-        launcher.send_feedbacks(
-            static_cast<float>(feedback_erpm), feedback_current, feedback_voltage
-        );
-
         // 射出(Ready)中だけ、リリース位置までの残り距離から加速レートを動的に決める
         if (app_state == InitState::ZeroPointInitializing) {
-            revision_erpm = trapezoid_erpm(revision_erpm, target_erpm);
+            accelerating_erpm = trapezoid_erpm(accelerating_erpm, target_erpm);
         } else {
-            revision_erpm = update_cmd_erpm(
-                revision_erpm,
+            accelerating_erpm = update_cmd_erpm(
+                accelerating_erpm,
                 target_erpm,
                 encoder_erpm(),
-                remaining_rad_to_release(NUMBER_OF_ROTATION),
+                remaining_rad_to_release(RELEACE_ROTATION),
                 app_state == InitState::Ready
             );
         }
+        vesc.comm_can_set_erpm(VESC_ID, accelerating_erpm * ROTATION_DIRECTION);
 
-        vesc.comm_can_set_erpm(VESC_ID, revision_erpm * ROTATION_DIRECTION);
+        launcher.send_feedbacks(
+            accelerating_erpm, static_cast<float>(feedback_erpm), feedback_voltage, feedback_current
+        );
     }
 }
 

@@ -50,7 +50,7 @@ constexpr float INIT_RETURN_MIN_ERPM    = 1500.0f;
 constexpr float INIT_RETURN_MAX_ERPM    = 10000.0f;
 constexpr float TARGET_ERPM_INIT        = 2000.0f;
 constexpr float INITIAL_POINT_ROTATIONS = 5.8f;
-constexpr float RELEACE_ROTATION        = 11.0f;
+constexpr float RELEACE_ROTATION        = 10.0f;
 constexpr float NUMBER_OF_ROTATION      = 12.0f;
 constexpr float ROTATION_DIRECTION      = -1.0f;
 constexpr float ENCODER_SAMPLE_PERIOD_S = 0.001f;   // [s]
@@ -117,14 +117,10 @@ float encoder_erpm()
  */
 float remaining_rad_to_release(float release_point)
 {
-    return rotate_to_rad(release_point * static_cast<float>(process_count)) +
-           std::min<float>(
-               rotate_to_rad(
-                   (release_point - NUMBER_OF_ROTATION) * static_cast<float>(process_count)
-               ),
-               1.0f
-           ) -
-           encoder_rad;
+    const float target_rev =
+        NUMBER_OF_ROTATION * static_cast<float>(process_count) -
+        (NUMBER_OF_ROTATION - release_point);  // count=1 なら 11, count=2 なら 23
+    return rotate_to_rad(target_rev) - encoder_rad;
 }
 
 /**

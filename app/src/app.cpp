@@ -22,6 +22,8 @@
 volatile bool timer_1khz_triggered;
 volatile bool timer_100hz_triggered;
 
+uint8_t send_initial_point_remain_count = 0;
+
 // 状態管理用
 enum class InitState {
     WaitForInit,
@@ -244,6 +246,12 @@ void timer_100hz_process()
         launcher.send_feedbacks(
             accelerating_erpm, static_cast<float>(feedback_erpm), feedback_voltage, feedback_current
         );
+
+        // 初期位置通知の分散送信 (10msごとに最大5回)
+        if (send_initial_point_remain_count > 0) {
+            launcher.send_initial_point(encoder_rad);
+            send_initial_point_remain_count--;
+        }
     }
 }
 
@@ -320,7 +328,9 @@ void loop()
             target_erpm = 0.0f;
             app_state   = InitState::Ready;
             process_count++;
+            // 1回きりの直接送信をやめ、複数回送信カウンタをセット
             launcher.send_initial_point(encoder_rad);
+            send_initial_point_remain_count = 5;
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
 
         } else {
@@ -346,7 +356,10 @@ void loop()
             target_erpm = 0.0f;
             app_state   = InitState::Ready;
             process_count++;
+            // 1回きりの直接送信をやめ、複数回送信カウンタをセット
+            send_initial_point_remain_count = 5;
             launcher.send_initial_point(encoder_rad);
+
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
         } else {
             HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
